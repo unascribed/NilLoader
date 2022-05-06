@@ -1,0 +1,61 @@
+plugins {
+	id 'com.github.johnrengelman.shadow' version '7.1.2'
+	id 'java-library'
+}
+
+sourceCompatibility = 8
+targetCompatibility = 8
+
+group = "com.unascribed"
+archivesBaseName = "NilLoader"
+version = "1.0"
+
+tasks.withType(JavaCompile) {
+	options.release = 8
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	api 'org.ow2.asm:asm:9.2'
+	api 'org.ow2.asm:asm-tree:9.2'
+	shadow 'org.ow2.asm:asm:9.2'
+	shadow 'org.ow2.asm:asm-tree:9.2'
+	
+	api 'com.grack:nanojson:1.7'
+	shadow 'com.grack:nanojson:1.7'
+	
+	compileOnly 'org.slf4j:slf4j-api:1.7.9'
+	compileOnly 'org.apache.logging.log4j:log4j-api:2.17.1'
+	compileOnly 'log4j:log4j:1.2.17'
+	compileOnly 'commons-logging:commons-logging:1.2'
+}
+
+processResources {
+	inputs.property "version", version
+	
+	filesMatching("nilloader.nilmod.css") {
+		expand "version": version
+	}
+}
+
+jar {
+	classifier 'slim'
+}
+
+shadowJar {
+	classifier ''
+	
+	relocate 'org.objectweb.asm', 'nilloader.asm'
+	relocate 'com.grack.nanojson', 'nilloader.nanojson'
+	
+	manifest {
+		attributes (
+			'Premain-Class': 'nilloader.NilLoader'
+		)
+	}
+}
+
+tasks.build.dependsOn tasks.shadowJar

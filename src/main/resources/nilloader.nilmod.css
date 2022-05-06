@@ -1,0 +1,6 @@
+@nilmod {
+	name: "NilLoader";
+	description: "The universally-compatible ultra-light mod loader.";
+	authors: "unascribed";
+	version: "${version}";
+}
