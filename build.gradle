@@ -1,6 +1,7 @@
 plugins {
 	id 'com.github.johnrengelman.shadow' version '7.1.2'
 	id 'java-library'
+	id 'maven-publish'
 }
 
 sourceCompatibility = 8
@@ -18,14 +19,21 @@ repositories {
 	mavenCentral()
 }
 
+configurations {
+	shade
+	compileOnly.extendsFrom shade
+}
+
 dependencies {
-	api 'org.ow2.asm:asm:9.2'
-	api 'org.ow2.asm:asm-tree:9.2'
-	shadow 'org.ow2.asm:asm:9.2'
-	shadow 'org.ow2.asm:asm-tree:9.2'
+	shade 'org.ow2.asm:asm:9.2'
+	shade 'org.ow2.asm:asm-tree:9.2'
+	shade 'org.ow2.asm:asm-analysis:9.2'
+	shade 'org.ow2.asm:asm-commons:9.2'
 	
-	api 'com.grack:nanojson:1.7'
-	shadow 'com.grack:nanojson:1.7'
+	shade 'org.cadixdev:lorenz:0.5.6'
+	shade 'org.cadixdev:lorenz-asm:0.5.6'
+	
+	shade 'com.grack:nanojson:1.7'
 	
 	compileOnly 'org.slf4j:slf4j-api:1.7.9'
 	compileOnly 'org.apache.logging.log4j:log4j-api:2.17.1'
@@ -48,13 +56,31 @@ jar {
 shadowJar {
 	classifier ''
 	
-	relocate 'org.objectweb.asm', 'nilloader.asm'
-	relocate 'com.grack.nanojson', 'nilloader.nanojson'
+	configurations = [project.configurations.shade]
+	
+	relocate 'org.objectweb.asm', 'nilloader.api.lib.asm'
+	relocate 'com.grack.nanojson', 'nilloader.api.lib.nanojson'
+	relocate 'org.cadixdev.lorenz', 'nilloader.impl.lib.lorenz'
+	relocate 'org.cadixdev.bombe', 'nilloader.impl.lib.bombe'
+	
+	exclude 'META-INF/**'
+	exclude 'LICENSE.txt'
 	
 	manifest {
 		attributes (
 			'Premain-Class': 'nilloader.NilLoader'
 		)
+	}
+}
+
+publishing {
+	publications {
+		maven(MavenPublication) {
+			groupId = 'com.unascribed'
+			artifactId = 'nilloader'
+			version = project.version
+			artifact shadowJar
+		}
 	}
 }
 

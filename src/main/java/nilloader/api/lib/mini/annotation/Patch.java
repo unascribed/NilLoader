@@ -45,16 +45,8 @@ public final class Patch {
 	@Documented
 	@Retention(RUNTIME)
 	@Target(TYPE)
-	@Repeatable(Classes.class)
 	public @interface Class {
 		String value();
-	}
-	
-	@Documented
-	@Retention(RUNTIME)
-	@Target(TYPE)
-	public @interface Classes {
-		Class[] value();
 	}
 
 	/**
