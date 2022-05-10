@@ -74,6 +74,15 @@ shadowJar {
 }
 
 publishing {
+	repositories {
+		maven {
+			url "https://repo-api.sleeping.town/"
+			credentials {
+				username project.hasProperty("publish-username") ? project.getProperty("publish-username") : null
+				password project.hasProperty("publish-password") ? project.getProperty("publish-password") : null
+			}
+		}
+	}
 	publications {
 		maven(MavenPublication) {
 			groupId = 'com.unascribed'
