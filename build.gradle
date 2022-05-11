@@ -9,7 +9,7 @@ targetCompatibility = 8
 
 group = "com.unascribed"
 archivesBaseName = "NilLoader"
-version = "1.0.1"
+version = "1.0.2-pre2"
 
 tasks.withType(JavaCompile) {
 	options.release = 8
@@ -73,6 +73,12 @@ shadowJar {
 	}
 }
 
+task sourcesJar(type: Jar) {
+	classifier 'sources'
+	
+	from sourceSets.main.allSource
+}
+
 publishing {
 	repositories {
 		maven {
@@ -89,8 +95,10 @@ publishing {
 			artifactId = 'nilloader'
 			version = project.version
 			artifact shadowJar
+			artifact sourcesJar
 		}
 	}
 }
 
 tasks.build.dependsOn tasks.shadowJar
+tasks.build.dependsOn tasks.sourcesJar

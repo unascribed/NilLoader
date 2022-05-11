@@ -67,12 +67,14 @@ public class NilLoader {
 	private static final Map<String, String> activeModMappings = new HashMap<>();
 	
 	private static String activeMod = null;
+	private static boolean premainCalled = false;
 	
 	private static boolean frozen = false;
 	
 	private static URLClassLoader classLoader;
 	
 	public static void premain(String arg, Instrumentation ins) {
+		premainCalled = true;
 		for (Runnable r : NilLogManager.initLogs) {
 			r.run();
 		}
@@ -272,6 +274,10 @@ public class NilLoader {
 	}
 	
 	public static void fireEntrypoint(String entrypoint) {
+		if (!premainCalled) {
+			log.error("fireEntrypoint called on an uninitialized NilLoader; classloading shenanigans?");
+			return;
+		}
 		List<EntrypointListener> listeners = entrypointListeners.get(entrypoint);
 		if (listeners == null || listeners.isEmpty()) {
 			log.info("Reached entrypoint {}", entrypoint);
