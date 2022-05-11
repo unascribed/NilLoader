@@ -50,6 +50,7 @@ import org.objectweb.asm.Handle;
 import org.objectweb.asm.tree.*;
 
 import nilloader.NilLoader;
+import nilloader.NilLoaderLog;
 import nilloader.api.ClassTransformer;
 import nilloader.api.lib.mini.annotation.Patch;
 
@@ -74,7 +75,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 		String className = classAnn.value().replace('.', '/');
 		classTargetName = remapType(className);
 		if (!className.equals(classTargetName)) {
-			NilLoader.log.debug("Retargeted {} from {} to {}", getClass().getSimpleName(), className, classTargetName);
+			$$internal$logDebug("Retargeted {} from {} to {}", getClass().getSimpleName(), className, classTargetName);
 		}
 		for (final Method m : getClass().getMethods()) {
 			final String name = m.getName();
@@ -82,7 +83,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 				MethodSignature sig = MethodSignature.of(a.value());
 				String desc = remapMethod(className, sig.getName(), sig.getDescriptor().toString())+remapMethodDesc(sig.getDescriptor().toString());
 				if (!a.value().equals(desc)) {
-					NilLoader.log.debug("Retargeted {}.{} from {} to {}", getClass().getSimpleName(), name, a.value(), desc);
+					$$internal$logDebug("Retargeted {}.{} from {} to {}", getClass().getSimpleName(), name, a.value(), desc);
 				}
 				if (!methods.containsKey(desc)) {
 					methods.put(desc, new ArrayList<PatchMethod>());
@@ -108,6 +109,10 @@ public abstract class MiniTransformer implements ClassTransformer {
 				}
 			}
 		}
+	}
+	
+	public String getClassTargetName() {
+		return classTargetName;
 	}
 	
 	@Override
@@ -138,7 +143,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 					} catch (Throwable t) {
 						throw new Error("Failed to patch "+className+"."+mn.name+mn.desc+" via "+pm, t);
 					}
-					NilLoader.log.debug("[{}] Successfully transformed {}.{}{} via {}", getClass().getName(), className, mn.name, mn.desc, pm);
+					$$internal$logDebug("[{}] Successfully transformed {}.{}{} via {}", getClass().getName(), className, mn.name, mn.desc, pm);
 				}
 			}
 			requiredsNotSeen.remove(name);
@@ -166,7 +171,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 			}
 			msg.deleteCharAt(msg.length()-1);
 			String msgS = msg.toString();
-			NilLoader.log.error("[{}] {}", getClass().getName(), msgS);
+			$$internal$logError("[{}] {}", getClass().getName(), msgS);
 			throw new Error(msgS);
 		}
 		
@@ -179,6 +184,14 @@ public abstract class MiniTransformer implements ClassTransformer {
 		return writer.toByteArray();
 	}
 	
+	protected void $$internal$logDebug(String fmt, Object... params) {
+		NilLoaderLog.log.debug(fmt, params);
+	}
+
+	protected void $$internal$logError(String fmt, Object... params) {
+		NilLoaderLog.log.error(fmt, params);
+	}
+
 	private String remapType(String type) {
 		return mappings.map(m -> m.computeClassMapping(type))
 				.orElse(Optional.empty())

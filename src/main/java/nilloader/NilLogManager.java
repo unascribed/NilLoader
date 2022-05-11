@@ -51,19 +51,20 @@ public class NilLogManager {
 		 * to wake the JUL beast. This is also a nicer default for non-Minecraft usages.
 		 */
 		if (Boolean.getBoolean("nil.alwaysUseAdHocLogger")) {
+			initLogs.add(() -> NilLoaderLog.log.debug("Forcing usage of ad-hoc logger, as requested"));
 			IMPL = new AdHocLogImpl("NilLoader");
 		} else {
 			NilLogImpl implTmp = null;
 			if (classDefined("org.apache.logging.log4j.Logger")) {
-				initLogs.add(() -> NilLoader.log.debug("Discovered Log4j 2"));
+				initLogs.add(() -> NilLoaderLog.log.debug("Discovered Log4j 2"));
 				implTmp = new Log4j2LogImpl("NilLoader");
 			} else if (classDefined("org.slf4j.Logger")) {
-				initLogs.add(() -> NilLoader.log.debug("Discovered SLF4j"));
+				initLogs.add(() -> NilLoaderLog.log.debug("Discovered SLF4j"));
 				implTmp = new Slf4jLogImpl("NilLoader");
 			} else if (classDefined("cpw.mods.fml.relauncher.FMLRelaunchLog")) {
-				initLogs.add(() -> NilLoader.log.debug("Discovered FML Relauncher, attempting to initialize..."));
+				initLogs.add(() -> NilLoaderLog.log.debug("Discovered FML Relauncher, attempting to initialize..."));
 				try {
-					Class<?> log = Class.forName("cpw.mods.fml.relauncher.FMLRelaunchLog");
+					Class<?> log = Class.forName("cpw.mods.fml.relauncher.FMLRelaunchLog", true, ClassLoader.getSystemClassLoader());
 					Method configure = log.getDeclaredMethod("configureLogging");
 					configure.setAccessible(true);
 					try {
@@ -83,20 +84,20 @@ public class NilLogManager {
 							throw e.getCause();
 						}
 					}
-					initLogs.add(() -> NilLoader.log.debug("Relauncher log initialized successfully"));
+					initLogs.add(() -> NilLoaderLog.log.debug("Relauncher log initialized successfully"));
 					implTmp = new JULLogImpl("Legacy FML", java.util.logging.Logger.getLogger("ForgeModLoader"), "NilLoader");
 				} catch (Throwable t) {
-					initLogs.add(() -> NilLoader.log.debug("Unexpected exception when trying to initialize FMLRelaunchLog", t));
+					initLogs.add(() -> NilLoaderLog.log.debug("Unexpected exception when trying to initialize FMLRelaunchLog", t));
 				}
 			} else if (classDefined("org.apache.log4j.Logger")) {
-				initLogs.add(() -> NilLoader.log.debug("Discovered Log4j 1 / Reload4j"));
+				initLogs.add(() -> NilLoaderLog.log.debug("Discovered Log4j 1 / Reload4j"));
 				implTmp = new Log4j1LogImpl("NilLoader");
 			} else if (classDefined("org.apache.commons.logging.Log")) {
-				initLogs.add(() -> NilLoader.log.debug("Discovered Commons Logging"));
+				initLogs.add(() -> NilLoaderLog.log.debug("Discovered Commons Logging"));
 				implTmp = new CommonsLogImpl("NilLoader");
 			}
 			if (implTmp == null) {
-				initLogs.add(() -> NilLoader.log.debug("Failed to discover other loggers, using ad-hoc"));
+				initLogs.add(() -> NilLoaderLog.log.debug("Failed to discover other loggers, using ad-hoc"));
 				implTmp = new AdHocLogImpl("NilLoader");
 			}
 			IMPL = implTmp;

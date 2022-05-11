@@ -4,6 +4,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PrintStream;
+import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
@@ -13,9 +15,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -36,16 +40,16 @@ import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParser;
 import nilloader.api.ClassTransformer;
-import nilloader.api.NilLogger;
 import nilloader.api.NilMetadata;
+import nilloader.api.lib.mini.MiniTransformer;
 import nilloader.api.lib.qdcss.QDCSS;
 import nilloader.impl.FilteredURLClassLoader;
+import nilloader.impl.fixes.RelaunchClassLoaderTransformer;
 
 public class NilLoader {
 
-	public static final NilLogger log = NilLogManager.getLogger("NilLoader");
-	
 	private static final boolean DUMP = Boolean.getBoolean("nil.debug.dump");
+	private static final boolean DEBUG_CLASSLOADING = Boolean.getBoolean("nil.debugClassLoading");
 	
 	private static final class EntrypointListener {
 		public final String id;
@@ -60,11 +64,14 @@ public class NilLoader {
 	
 	private static final Map<String, NilMetadata> mods = new LinkedHashMap<>();
 	private static final Map<String, List<EntrypointListener>> entrypointListeners = new HashMap<>();
+	private static final List<ClassTransformer> builtInTransformers = new ArrayList<>();
 	private static final List<ClassTransformer> transformers = new ArrayList<>();
 	private static final Map<URL, String> classSources = new LinkedHashMap<>();
 	
 	private static final Map<String, Map<String, MappingSet>> modMappings = new HashMap<>();
 	private static final Map<String, String> activeModMappings = new HashMap<>();
+	
+	private static Set<String> loadedClasses = new HashSet<>();
 	
 	private static String activeMod = null;
 	private static boolean premainCalled = false;
@@ -75,16 +82,34 @@ public class NilLoader {
 	
 	public static void premain(String arg, Instrumentation ins) {
 		premainCalled = true;
+		if (DEBUG_CLASSLOADING) {
+			PrintStream err = System.err;
+			ins.addTransformer((loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
+				err.printf("%s class %s via %s from %s%n", classBeingRedefined == null ? "Loading" : "Redefining", className, loader,
+						(protectionDomain != null && protectionDomain.getCodeSource() != null) ? protectionDomain.getCodeSource().getLocation() : "[unknown]");
+				return classfileBuffer;
+			}, true);
+		}
+		ClassFileTransformer loadTracker = (loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
+			if (loadedClasses != null) loadedClasses.add(className);
+			return classfileBuffer;
+		};
+		ins.addTransformer(loadTracker);
+		builtInTransformers.add(new RelaunchClassLoaderTransformer());
+		ins.addTransformer((loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
+			if (classBeingRedefined != null || className == null) return classfileBuffer;
+			return NilLoader.transform(builtInTransformers, className, classfileBuffer);
+		});
 		for (Runnable r : NilLogManager.initLogs) {
 			r.run();
 		}
 		NilLogManager.initLogs.clear();
 		discover("nilloader", NilLoader.class.getClassLoader());
-		log.info("NilLoader v{} initialized, logging via {}", mods.get("nilloader").version, log.getImplementationName());
+		NilLoaderLog.log.info("NilLoader v{} initialized, logging via {}", mods.get("nilloader").version, NilLoaderLog.log.getImplementationName());
 		try {
 			discover(new File(NilLoader.class.getProtectionDomain().getCodeSource().getLocation().toURI()));
 		} catch (URISyntaxException | IllegalArgumentException e) {
-			log.debug("Failed to discover additional nilmods in our jar", e);
+			NilLoaderLog.log.debug("Failed to discover additional nilmods in our jar", e);
 		}
 		discoverDirectory(new File("mods"), "jar", "nilmod");
 		discoverDirectory(new File("nilmods"), "jar");
@@ -105,7 +130,7 @@ public class NilLoader {
 			discoveries.append(") v");
 			discoveries.append(meta.version);
 		}
-		log.info("Discovered {} nilmod{}:{}", mods.size(), mods.size() == 1 ? "" : "s", discoveries);
+		NilLoaderLog.log.info("Discovered {} nilmod{}:{}", mods.size(), mods.size() == 1 ? "" : "s", discoveries);
 		// we filter nilloader out of the class loader as nilloader is designed to be shadowed, but
 		// we don't want to have multiple versions of nilloader on the classpath
 		classLoader = new FilteredURLClassLoader(classSources.keySet().toArray(new URL[0]), new String[] { "nilloader.", "nilloader/" }, NilLoader.class.getClassLoader());
@@ -116,7 +141,7 @@ public class NilLoader {
 				if (definer != null && isFrozen()) {
 					MappingSet mappings = getActiveMappings(definer);
 					if (mappings != null) {
-						NilLoader.log.debug("Remapping mod class {} via mapping set {}", className, NilLoader.getActiveMappingId(definer));
+						NilLoaderLog.log.debug("Remapping mod class {} via mapping set {}", className, NilLoader.getActiveMappingId(definer));
 						ClassProviderInheritanceProvider cpip = new ClassProviderInheritanceProvider(Opcodes.ASM9, new ClassLoaderClassProvider(loader));
 						LorenzRemapper lr = new LorenzRemapper(mappings, cpip);
 						ClassReader reader = new ClassReader(classfileBuffer);
@@ -127,12 +152,14 @@ public class NilLoader {
 					}
 				}
 			}
-			return NilLoader.transform(className, classfileBuffer);
+			return NilLoader.transform(transformers, className, classfileBuffer);
 		});
 		fireEntrypoint("premain");
-		log.debug("{} class transformer{} registered", transformers.size(), transformers.size() == 1 ? "" : "s");
+		NilLoaderLog.log.debug("{} class transformer{} registered", transformers.size(), transformers.size() == 1 ? "" : "s");
 		frozen = true;
-		// clean up mappings we won't use
+		// clean up data we won't use
+		ins.removeTransformer(loadTracker);
+		loadedClasses = null;
 		for (Map.Entry<String, Map<String, MappingSet>> en : modMappings.entrySet()) {
 			String id = getActiveMappingId(en.getKey());
 			en.setValue(Collections.singletonMap(id, en.getValue().get(id)));
@@ -144,7 +171,7 @@ public class NilLoader {
 	}
 	
 	private static void discoverDirectory(File dir, String... extensions) {
-		log.debug("Searching for nilmods in ./{}", dir.getName());
+		NilLoaderLog.log.debug("Searching for nilmods in ./{}", dir.getName());
 		String[] trailers = new String[extensions.length];
 		for (int i = 0; i < extensions.length; i++) {
 			trailers[i] = "."+extensions[i];
@@ -175,7 +202,7 @@ public class NilLoader {
 				String name = en.getName();
 				if (name.endsWith(".nilmod.css") && !name.contains("/") && !name.equals("nilloader.nilmod.css")) {
 					String id = name.substring(0, name.length()-11);
-					log.debug("Discovered nilmod {} in {}", id, file);
+					NilLoaderLog.log.debug("Discovered nilmod {} in {}", id, file);
 					try (InputStream is = jar.getInputStream(en)) {
 						QDCSS metaCss = QDCSS.load(file.getName()+"/"+en.getName(), is);
 						NilMetadata meta = NilMetadata.from(id, metaCss);
@@ -202,13 +229,13 @@ public class NilLoader {
 								}
 							}
 						} catch (Exception e) {
-							log.warn("Failed to parse mappings in {}", file, e);
+							NilLoaderLog.log.warn("Failed to parse mappings in {}", file, e);
 						}
 					}
 				}
 			}
 		} catch (IOException e) {
-			log.warn("Failed to discover nilmods in {}", file, e);
+			NilLoaderLog.log.warn("Failed to discover nilmods in {}", file, e);
 		}
 		if (!found.isEmpty()) {
 			try {
@@ -218,7 +245,7 @@ public class NilLoader {
 					install(meta);
 				}
 			} catch (MalformedURLException e) {
-				log.warn("Failed to add {} to classpath", file, e);
+				NilLoaderLog.log.warn("Failed to add {} to classpath", file, e);
 			}
 		}
 	}
@@ -264,41 +291,41 @@ public class NilLoader {
 
 	private static void discover(String id, ClassLoader classLoader) {
 		try {
-			log.debug("Attempting to discover nilmod with ID {} from the classpath", id);
+			NilLoaderLog.log.debug("Attempting to discover nilmod with ID {} from the classpath", id);
 			QDCSS metaCss = QDCSS.load(classLoader.getResource(id+".nilmod.css"));
 			NilMetadata meta = NilMetadata.from(id, metaCss);
 			install(meta);
 		} catch (IOException e) {
-			log.error("Failed to discover nilmod with ID {} from classpath", id, e);
+			NilLoaderLog.log.error("Failed to discover nilmod with ID {} from classpath", id, e);
 		}
 	}
 	
 	public static void fireEntrypoint(String entrypoint) {
 		if (!premainCalled) {
-			log.error("fireEntrypoint called on an uninitialized NilLoader; classloading shenanigans?");
+			NilLoaderLog.log.error("fireEntrypoint called on an uninitialized NilLoader; classloading shenanigans? I was loaded by {}", NilLoader.class.getClassLoader());
 			return;
 		}
 		List<EntrypointListener> listeners = entrypointListeners.get(entrypoint);
 		if (listeners == null || listeners.isEmpty()) {
-			log.info("Reached entrypoint {}", entrypoint);
+			NilLoaderLog.log.info("Reached entrypoint {}", entrypoint);
 		} else {
-			log.info("Reached entrypoint {}, informing {} listener{}", entrypoint, listeners.size(), listeners.size() == 1 ? "" : "s");
+			NilLoaderLog.log.info("Reached entrypoint {}, informing {} listener{}", entrypoint, listeners.size(), listeners.size() == 1 ? "" : "s");
 			for (EntrypointListener l : listeners) {
 				if (l.fired) continue;
 				l.fired = true;
 				String oldActiveMod = activeMod; // in case of recursive entrypoints
 				try {
 					activeMod = l.id;
-					log.debug("Notifying {} of entrypoint {}", l.id, entrypoint);
+					NilLoaderLog.log.debug("Notifying {} of entrypoint {}", l.id, entrypoint);
 					Class<?> clazz = Class.forName(l.className, true, classLoader);
 					Object o = clazz.newInstance();
 					if (o instanceof Runnable) {
 						((Runnable)o).run();
 					} else {
-						log.error("Failed to invoke entrypoint {} for nilmod {}: Listener class {} is not an instance of Runnable", entrypoint, l.id, l.className);
+						NilLoaderLog.log.error("Failed to invoke entrypoint {} for nilmod {}: Listener class {} is not an instance of Runnable", entrypoint, l.id, l.className);
 					}
 				} catch (Throwable t) {
-					log.error("Failed to invoke entrypoint {} for nilmod {}", entrypoint, l.id, t);
+					NilLoaderLog.log.error("Failed to invoke entrypoint {} for nilmod {}", entrypoint, l.id, t);
 				} finally {
 					activeMod = oldActiveMod;
 				}
@@ -308,13 +335,13 @@ public class NilLoader {
 
 	private static void install(NilMetadata meta) {
 		if (mods.containsKey(meta.id)) {
-			log.warn("Loading nilmod with ID {} a second time!", meta.id);
+			NilLoaderLog.log.warn("Loading nilmod with ID {} a second time!", meta.id);
 		}
-		log.debug("Installing discovered mod {} (ID {}) v{}", meta.name, meta.id, meta.version);
+		NilLoaderLog.log.debug("Installing discovered mod {} (ID {}) v{}", meta.name, meta.id, meta.version);
 		mods.put(meta.id, meta);
 	}
 
-	public static byte[] transform(String className, byte[] classBytes) {
+	public static byte[] transform(List<ClassTransformer> transformers, String className, byte[] classBytes) {
 		byte[] orig = DUMP ? classBytes : null;
 		try {
 			boolean changed = false;
@@ -324,7 +351,7 @@ public class NilLoader {
 						changed = true;
 					}
 				} catch (Throwable t) {
-					log.error("Failed to transform {} via {}", className, ct.getClass().getName(), t);
+					NilLoaderLog.log.error("Failed to transform {} via {}", className, ct.getClass().getName(), t);
 				}
 			}
 			if (changed && DUMP) {
@@ -353,7 +380,7 @@ public class NilLoader {
 				fos.close();
 			}
 		} catch (IOException e) {
-			log.debug("Failed to write before class to {}", f, e);
+			NilLoaderLog.log.debug("Failed to write before class to {}", f, e);
 		}
 	}
 	
@@ -383,6 +410,12 @@ public class NilLoader {
 
 	public static void registerTransformer(ClassTransformer transformer) {
 		if (frozen) throw new IllegalStateException("Transformers must be registered during the premain entrypoint (or earlier)");
+		if (transformer instanceof MiniTransformer) {
+			MiniTransformer mini = (MiniTransformer)transformer;
+			if (loadedClasses.contains(mini.getClassTargetName())) {
+				throw new IllegalStateException("Cannot register transformer for already loaded class: "+mini.getClassTargetName());
+			}
+		}
 		transformers.add(transformer);
 	}
 
