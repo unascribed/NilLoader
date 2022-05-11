@@ -313,8 +313,12 @@ public class NilLoader {
 		try {
 			boolean changed = false;
 			for (ClassTransformer ct : transformers) {
-				if ((classBytes = ct.transform(className, classBytes)) != orig) {
-					changed = true;
+				try {
+					if ((classBytes = ct.transform(className, classBytes)) != orig) {
+						changed = true;
+					}
+				} catch (Throwable t) {
+					log.error("Failed to transform {} via {}", className, ct.getClass().getName(), t);
 				}
 			}
 			if (changed && DUMP) {

@@ -73,13 +73,17 @@ public abstract class MiniTransformer implements ClassTransformer {
 		Patch.Class classAnn = getClass().getAnnotation(Patch.Class.class);
 		String className = classAnn.value().replace('.', '/');
 		classTargetName = remapType(className);
-		NilLoader.log.debug("Retargeted {} from {} to {}", getClass().getSimpleName(), className, classTargetName);
+		if (!className.equals(classTargetName)) {
+			NilLoader.log.debug("Retargeted {} from {} to {}", getClass().getSimpleName(), className, classTargetName);
+		}
 		for (final Method m : getClass().getMethods()) {
 			final String name = m.getName();
 			for (final Patch.Method a : m.getAnnotationsByType(Patch.Method.class)) {
 				MethodSignature sig = MethodSignature.of(a.value());
 				String desc = remapMethod(className, sig.getName(), sig.getDescriptor().toString())+remapMethodDesc(sig.getDescriptor().toString());
-				NilLoader.log.debug("Retargeted {}.{} from {} to {}", getClass().getSimpleName(), name, a.value(), desc);
+				if (!a.value().equals(desc)) {
+					NilLoader.log.debug("Retargeted {}.{} from {} to {}", getClass().getSimpleName(), name, a.value(), desc);
+				}
 				if (!methods.containsKey(desc)) {
 					methods.put(desc, new ArrayList<PatchMethod>());
 				}
@@ -162,7 +166,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 			}
 			msg.deleteCharAt(msg.length()-1);
 			String msgS = msg.toString();
-			NilLoader.log.debug("[{}] {}", getClass().getName(), msgS);
+			NilLoader.log.error("[{}] {}", getClass().getName(), msgS);
 			throw new Error(msgS);
 		}
 		
@@ -359,9 +363,9 @@ public abstract class MiniTransformer implements ClassTransformer {
 	protected MethodInsnNode INVOKESTATIC(String owner, String name, String desc) { return new MethodInsnNode(INVOKESTATIC, remapType(owner), remapMethod(owner, name, desc), remapMethodDesc(desc)); }
 	protected MethodInsnNode INVOKEINTERFACE(String owner, String name, String desc) { return new MethodInsnNode(INVOKEINTERFACE, remapType(owner), remapMethod(owner, name, desc), remapMethodDesc(desc)); }
 	protected InvokeDynamicInsnNode INVOKEDYNAMIC(String name, String desc, Handle bootstrapMethodHandle, Object... bootstrapMethodArguments) { return new InvokeDynamicInsnNode(name, remapMethodDesc(desc), bootstrapMethodHandle, bootstrapMethodArguments); }
-	protected TypeInsnNode NEW(String desc) { return new TypeInsnNode(NEW, remapMethodDesc(desc)); }
+	protected TypeInsnNode NEW(String desc) { return new TypeInsnNode(NEW, remapType(desc)); }
 	protected IntInsnNode NEWARRAY(int i) { return new IntInsnNode(NEWARRAY, i); }
-	protected TypeInsnNode ANEWARRAY(String desc) { return new TypeInsnNode(ANEWARRAY, remapFieldDesc(desc)); }
+	protected TypeInsnNode ANEWARRAY(String desc) { return new TypeInsnNode(ANEWARRAY, remapType(desc)); }
 	protected InsnNode ARRAYLENGTH() { return new InsnNode(ARRAYLENGTH); }
 	protected InsnNode ATHROW() { return new InsnNode(ATHROW); }
 	protected TypeInsnNode CHECKCAST(String desc) { return new TypeInsnNode(CHECKCAST, remapType(desc)); }

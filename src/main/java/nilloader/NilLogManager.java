@@ -50,53 +50,57 @@ public class NilLogManager {
 		 * If all of that fails, we simply fall back to an "ad-hoc" stdout logger rather than trying
 		 * to wake the JUL beast. This is also a nicer default for non-Minecraft usages.
 		 */
-		NilLogImpl implTmp = null;
-		if (classDefined("org.apache.logging.log4j.Logger")) {
-			initLogs.add(() -> NilLoader.log.debug("Discovered Log4j 2"));
-			implTmp = new Log4j2LogImpl("NilLoader");
-		} else if (classDefined("org.slf4j.Logger")) {
-			initLogs.add(() -> NilLoader.log.debug("Discovered SLF4j"));
-			implTmp = new Slf4jLogImpl("NilLoader");
-		} else if (classDefined("cpw.mods.fml.relauncher.FMLRelaunchLog")) {
-			initLogs.add(() -> NilLoader.log.debug("Discovered FML Relauncher, attempting to initialize..."));
-			try {
-				Class<?> log = Class.forName("cpw.mods.fml.relauncher.FMLRelaunchLog");
-				Method configure = log.getDeclaredMethod("configureLogging");
-				configure.setAccessible(true);
+		if (Boolean.getBoolean("nil.alwaysUseAdHocLogger")) {
+			IMPL = new AdHocLogImpl("NilLoader");
+		} else {
+			NilLogImpl implTmp = null;
+			if (classDefined("org.apache.logging.log4j.Logger")) {
+				initLogs.add(() -> NilLoader.log.debug("Discovered Log4j 2"));
+				implTmp = new Log4j2LogImpl("NilLoader");
+			} else if (classDefined("org.slf4j.Logger")) {
+				initLogs.add(() -> NilLoader.log.debug("Discovered SLF4j"));
+				implTmp = new Slf4jLogImpl("NilLoader");
+			} else if (classDefined("cpw.mods.fml.relauncher.FMLRelaunchLog")) {
+				initLogs.add(() -> NilLoader.log.debug("Discovered FML Relauncher, attempting to initialize..."));
 				try {
-					configure.invoke(null);
-				} catch (InvocationTargetException e) {
-					if (e.getCause() instanceof NullPointerException) {
-						/*
-						 * FML's logger initializer NPEs if the relauncher hasn't started yet, as it
-						 * tries to determine the Minecraft home with a field that's still null.
-						 * It's safe to just swallow the NPE and let Forge fix it later, as the NPE
-						 * causes the "configured" field to never be set to true, resulting in FML
-						 * reinitializing the logger when it tries to use it. configureLogging is
-						 * idempotent, so this doesn't break anything - it simply properly
-						 * configures the file logger, which is what we wanted anyway.
-						 */
-					} else {
-						throw e.getCause();
+					Class<?> log = Class.forName("cpw.mods.fml.relauncher.FMLRelaunchLog");
+					Method configure = log.getDeclaredMethod("configureLogging");
+					configure.setAccessible(true);
+					try {
+						configure.invoke(null);
+					} catch (InvocationTargetException e) {
+						if (e.getCause() instanceof NullPointerException) {
+							/*
+							 * FML's logger initializer NPEs if the relauncher hasn't started yet, as it
+							 * tries to determine the Minecraft home with a field that's still null.
+							 * It's safe to just swallow the NPE and let Forge fix it later, as the NPE
+							 * causes the "configured" field to never be set to true, resulting in FML
+							 * reinitializing the logger when it tries to use it. configureLogging is
+							 * idempotent, so this doesn't break anything - it simply properly
+							 * configures the file logger, which is what we wanted anyway.
+							 */
+						} else {
+							throw e.getCause();
+						}
 					}
+					initLogs.add(() -> NilLoader.log.debug("Relauncher log initialized successfully"));
+					implTmp = new JULLogImpl("Legacy FML", java.util.logging.Logger.getLogger("ForgeModLoader"), "NilLoader");
+				} catch (Throwable t) {
+					initLogs.add(() -> NilLoader.log.debug("Unexpected exception when trying to initialize FMLRelaunchLog", t));
 				}
-				initLogs.add(() -> NilLoader.log.debug("Relauncher log initialized successfully"));
-				implTmp = new JULLogImpl("Legacy FML", java.util.logging.Logger.getLogger("ForgeModLoader"), "NilLoader");
-			} catch (Throwable t) {
-				initLogs.add(() -> NilLoader.log.debug("Unexpected exception when trying to initialize FMLRelaunchLog", t));
+			} else if (classDefined("org.apache.log4j.Logger")) {
+				initLogs.add(() -> NilLoader.log.debug("Discovered Log4j 1 / Reload4j"));
+				implTmp = new Log4j1LogImpl("NilLoader");
+			} else if (classDefined("org.apache.commons.logging.Log")) {
+				initLogs.add(() -> NilLoader.log.debug("Discovered Commons Logging"));
+				implTmp = new CommonsLogImpl("NilLoader");
 			}
-		} else if (classDefined("org.apache.log4j.Logger")) {
-			initLogs.add(() -> NilLoader.log.debug("Discovered Log4j 1 / Reload4j"));
-			implTmp = new Log4j1LogImpl("NilLoader");
-		} else if (classDefined("org.apache.commons.logging.Log")) {
-			initLogs.add(() -> NilLoader.log.debug("Discovered Commons Logging"));
-			implTmp = new CommonsLogImpl("NilLoader");
+			if (implTmp == null) {
+				initLogs.add(() -> NilLoader.log.debug("Failed to discover other loggers, using ad-hoc"));
+				implTmp = new AdHocLogImpl("NilLoader");
+			}
+			IMPL = implTmp;
 		}
-		if (implTmp == null) {
-			initLogs.add(() -> NilLoader.log.debug("Failed to discover other loggers, using ad-hoc"));
-			implTmp = new AdHocLogImpl("NilLoader");
-		}
-		IMPL = implTmp;
 	}
 	
 	private static boolean classDefined(String name) {
