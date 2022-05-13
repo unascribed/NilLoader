@@ -1,5 +1,6 @@
 package nilloader.api;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -34,22 +35,26 @@ public class NilMetadata {
 	 * entrypoint is reached.
 	 */
 	public final Map<String, String> entrypoints;
+	/**
+	 * The file this nilmod was loaded from. Generally points to a JAR, but you should be prepared
+	 * for it to point to a directory.
+	 */
+	public final File source;
 	
 	
 	public NilMetadata(String id, String name, String description,
-			String authors, String version, Map<String, String> entrypoints) {
+			String authors, String version, Map<String, String> entrypoints, File source) {
 		this.id = id;
 		this.name = name;
 		this.description = description;
 		this.authors = authors;
 		this.version = version;
 		this.entrypoints = entrypoints;
+		this.source = source;
 	}
 
 
-
-
-	public static NilMetadata from(String id, QDCSS css) {
+	public static NilMetadata from(String id, QDCSS css, File source) {
 		Map<String, String> entrypoints = new HashMap<>();
 		for (Map.Entry<String, String> en : css.flatten().entrySet()) {
 			if (en.getKey().startsWith("entrypoints.")) {
@@ -62,7 +67,8 @@ public class NilMetadata {
 				css.get("@nilmod.description").orElse("No description provided"),
 				css.get("@nilmod.authors").orElse("No authorship provided"),
 				css.get("@nilmod.version").orElse("?"),
-				Collections.unmodifiableMap(entrypoints)
+				Collections.unmodifiableMap(entrypoints),
+				source
 		);
 	}
 	

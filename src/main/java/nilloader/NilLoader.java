@@ -19,6 +19,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.jar.JarEntry;
@@ -104,7 +105,11 @@ public class NilLoader {
 			r.run();
 		}
 		NilLogManager.initLogs.clear();
-		discover("nilloader", NilLoader.class.getClassLoader());
+		try {
+			discover("nilloader", NilLoader.class.getClassLoader(), new File(NilLoader.class.getProtectionDomain().getCodeSource().getLocation().toURI()));
+		} catch (URISyntaxException e) {
+			throw new AssertionError(e);
+		}
 		NilLoaderLog.log.info("NilLoader v{} initialized, logging via {}", mods.get("nilloader").version, NilLoaderLog.log.getImplementationName());
 		try {
 			discover(new File(NilLoader.class.getProtectionDomain().getCodeSource().getLocation().toURI()));
@@ -133,6 +138,8 @@ public class NilLoader {
 		NilLoaderLog.log.info("Discovered {} nilmod{}:{}", mods.size(), mods.size() == 1 ? "" : "s", discoveries);
 		// we filter nilloader out of the class loader as nilloader is designed to be shadowed, but
 		// we don't want to have multiple versions of nilloader on the classpath
+		// TODO this causes nested/sibling class loader nightmares in a lot of environments; can we
+		// avoid it?
 		classLoader = new FilteredURLClassLoader(classSources.keySet().toArray(new URL[0]), new String[] { "nilloader.", "nilloader/" }, NilLoader.class.getClassLoader());
 		ins.addTransformer((loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
 			if (classBeingRedefined != null || className == null) return classfileBuffer;
@@ -157,7 +164,7 @@ public class NilLoader {
 		fireEntrypoint("premain");
 		NilLoaderLog.log.debug("{} class transformer{} registered", transformers.size(), transformers.size() == 1 ? "" : "s");
 		frozen = true;
-		// clean up data we won't use
+		// clean up stuff we won't be using anymore
 		ins.removeTransformer(loadTracker);
 		loadedClasses = null;
 		for (Map.Entry<String, Map<String, MappingSet>> en : modMappings.entrySet()) {
@@ -205,7 +212,7 @@ public class NilLoader {
 					NilLoaderLog.log.debug("Discovered nilmod {} in {}", id, file);
 					try (InputStream is = jar.getInputStream(en)) {
 						QDCSS metaCss = QDCSS.load(file.getName()+"/"+en.getName(), is);
-						NilMetadata meta = NilMetadata.from(id, metaCss);
+						NilMetadata meta = NilMetadata.from(id, metaCss, file);
 						found.add(meta);
 					}
 				}
@@ -289,11 +296,11 @@ public class NilLoader {
 		}
 	}
 
-	private static void discover(String id, ClassLoader classLoader) {
+	private static void discover(String id, ClassLoader classLoader, File src) {
 		try {
 			NilLoaderLog.log.debug("Attempting to discover nilmod with ID {} from the classpath", id);
 			QDCSS metaCss = QDCSS.load(classLoader.getResource(id+".nilmod.css"));
-			NilMetadata meta = NilMetadata.from(id, metaCss);
+			NilMetadata meta = NilMetadata.from(id, metaCss, src);
 			install(meta);
 		} catch (IOException e) {
 			NilLoaderLog.log.error("Failed to discover nilmod with ID {} from classpath", id, e);
@@ -337,7 +344,7 @@ public class NilLoader {
 		if (mods.containsKey(meta.id)) {
 			NilLoaderLog.log.warn("Loading nilmod with ID {} a second time!", meta.id);
 		}
-		NilLoaderLog.log.debug("Installing discovered mod {} (ID {}) v{}", meta.name, meta.id, meta.version);
+		NilLoaderLog.log.debug("Installing discovered mod {} (ID {}) v{} from {}", meta.name, meta.id, meta.version, meta.source);
 		mods.put(meta.id, meta);
 	}
 
@@ -423,6 +430,18 @@ public class NilLoader {
 		if (mod == null) throw new IllegalStateException("Can only call this method during an entrypoint");
 		if (frozen) throw new IllegalStateException("Mappings must be set during the premain entrypoint");
 		activeModMappings.put(mod, id);
+	}
+
+	public static Optional<NilMetadata> getModById(String id) {
+		return Optional.ofNullable(mods.get(id));
+	}
+	
+	public static List<NilMetadata> getMods() {
+		return new ArrayList<>(mods.values());
+	}
+
+	public static boolean isModLoaded(String id) {
+		return mods.containsKey(id);
 	}
 	
 }
