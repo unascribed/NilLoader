@@ -10,7 +10,6 @@ import java.lang.instrument.Instrumentation;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -24,6 +23,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import java.util.zip.ZipEntry;
 
 import org.cadixdev.bombe.asm.analysis.ClassProviderInheritanceProvider;
 import org.cadixdev.bombe.asm.jar.ClassLoaderClassProvider;
@@ -44,7 +44,6 @@ import nilloader.api.ClassTransformer;
 import nilloader.api.NilMetadata;
 import nilloader.api.lib.mini.MiniTransformer;
 import nilloader.api.lib.qdcss.QDCSS;
-import nilloader.impl.FilteredURLClassLoader;
 import nilloader.impl.fixes.RelaunchClassLoaderTransformer;
 
 public class NilLoader {
@@ -67,7 +66,8 @@ public class NilLoader {
 	private static final Map<String, List<EntrypointListener>> entrypointListeners = new HashMap<>();
 	private static final List<ClassTransformer> builtInTransformers = new ArrayList<>();
 	private static final List<ClassTransformer> transformers = new ArrayList<>();
-	private static final Map<URL, String> classSources = new LinkedHashMap<>();
+	private static final Map<File, String> classSources = new LinkedHashMap<>();
+	private static final Map<URL, String> classSourceURLs = new LinkedHashMap<>();
 	
 	private static final Map<String, Map<String, MappingSet>> modMappings = new HashMap<>();
 	private static final Map<String, String> activeModMappings = new HashMap<>();
@@ -79,8 +79,6 @@ public class NilLoader {
 	
 	private static boolean frozen = false;
 	
-	private static URLClassLoader classLoader;
-	
 	public static void premain(String arg, Instrumentation ins) {
 		premainCalled = true;
 		if (DEBUG_CLASSLOADING) {
@@ -89,7 +87,7 @@ public class NilLoader {
 				err.printf("%s class %s via %s from %s%n", classBeingRedefined == null ? "Loading" : "Redefining", className, loader,
 						(protectionDomain != null && protectionDomain.getCodeSource() != null) ? protectionDomain.getCodeSource().getLocation() : "[unknown]");
 				return classfileBuffer;
-			}, true);
+			}, ins.isRetransformClassesSupported());
 		}
 		ClassFileTransformer loadTracker = (loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
 			if (loadedClasses != null) loadedClasses.add(className);
@@ -136,11 +134,27 @@ public class NilLoader {
 			discoveries.append(meta.version);
 		}
 		NilLoaderLog.log.info("Discovered {} nilmod{}:{}", mods.size(), mods.size() == 1 ? "" : "s", discoveries);
-		// we filter nilloader out of the class loader as nilloader is designed to be shadowed, but
-		// we don't want to have multiple versions of nilloader on the classpath
-		// TODO this causes nested/sibling class loader nightmares in a lot of environments; can we
-		// avoid it?
-		classLoader = new FilteredURLClassLoader(classSources.keySet().toArray(new URL[0]), new String[] { "nilloader.", "nilloader/" }, NilLoader.class.getClassLoader());
+		for (Map.Entry<File, String> en : classSources.entrySet()) {
+			File f = en.getKey();
+			try {
+				classSourceURLs.put(f.toURI().toURL(), en.getValue());
+				ins.appendToSystemClassLoaderSearch(new JarFile(f) {
+					@Override
+					public ZipEntry getEntry(String name) {
+						if (name != null) {
+							// we filter nilloader out of the class loader as nilloader is designed
+							// to be shadowed, but we don't want to have multiple versions of
+							// nilloader on the classpath
+							if (name.startsWith("/nilloader/")) return null;
+							if (name.startsWith("nilloader/")) return null;
+						}
+						return super.getEntry(name);
+					}
+				});
+			} catch (IOException e) {
+				NilLoaderLog.log.error("Failed to add {} to classpath", f, e);
+			}
+		}
 		ins.addTransformer((loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
 			if (classBeingRedefined != null || className == null) return classfileBuffer;
 			if (protectionDomain != null && protectionDomain.getCodeSource() != null) {
@@ -171,10 +185,6 @@ public class NilLoader {
 			String id = getActiveMappingId(en.getKey());
 			en.setValue(Collections.singletonMap(id, en.getValue().get(id)));
 		}
-	}
-	
-	public static URLClassLoader getClassLoader() {
-		return classLoader;
 	}
 	
 	private static void discoverDirectory(File dir, String... extensions) {
@@ -245,14 +255,10 @@ public class NilLoader {
 			NilLoaderLog.log.warn("Failed to discover nilmods in {}", file, e);
 		}
 		if (!found.isEmpty()) {
-			try {
-				for (NilMetadata meta : found) {
-					classSources.put(file.toURI().toURL(), meta.id);
-					modMappings.put(meta.id, mappings);
-					install(meta);
-				}
-			} catch (MalformedURLException e) {
-				NilLoaderLog.log.warn("Failed to add {} to classpath", file, e);
+			for (NilMetadata meta : found) {
+				classSources.put(file, meta.id);
+				modMappings.put(meta.id, mappings);
+				install(meta);
 			}
 		}
 	}
@@ -324,7 +330,7 @@ public class NilLoader {
 				try {
 					activeMod = l.id;
 					NilLoaderLog.log.debug("Notifying {} of entrypoint {}", l.id, entrypoint);
-					Class<?> clazz = Class.forName(l.className, true, classLoader);
+					Class<?> clazz = Class.forName(l.className);
 					Object o = clazz.newInstance();
 					if (o instanceof Runnable) {
 						((Runnable)o).run();
@@ -412,7 +418,18 @@ public class NilLoader {
 	}
 	
 	public static String getDefiningMod(URL codeSource) {
-		return classSources.get(codeSource);
+		String raw = classSourceURLs.get(codeSource);
+		if (raw == null && "jar".equals(codeSource.getProtocol())) {
+			String str = codeSource.toString().substring(4);
+			int bang = str.indexOf('!');
+			if (bang != -1) str = str.substring(0, bang);
+			try {
+				return getDefiningMod(new URL(str));
+			} catch (MalformedURLException e) {
+				return null;
+			}
+		}
+		return raw;
 	}
 
 	public static void registerTransformer(ClassTransformer transformer) {
