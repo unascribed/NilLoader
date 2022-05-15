@@ -219,6 +219,9 @@ public class PatchContext {
 	public void add(AbstractInsnNode... nodes) {
 		if (pointer == -1) throw new PointerNotSetException();
 		for (int i = 0; i < nodes.length; i++) {
+			if (code.contains(nodes[i])) {
+				throw new IllegalArgumentException("Attempted to reuse an insn at index "+i+" of this addition - this is illegal and would corrupt the method! Use clone if you want to do this, otherwise you may have accidentally re-used a label");
+			}
 			code.add(pointer, nodes[i]);
 			pointer++;
 		}
