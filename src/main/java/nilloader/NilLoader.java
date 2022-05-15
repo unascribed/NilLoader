@@ -49,7 +49,7 @@ import nilloader.impl.fixes.RelaunchClassLoaderTransformer;
 public class NilLoader {
 
 	private static final boolean DUMP = Boolean.getBoolean("nil.debug.dump");
-	private static final boolean DEBUG_CLASSLOADING = Boolean.getBoolean("nil.debugClassLoading");
+	private static final boolean DEBUG_CLASSLOADING = Boolean.getBoolean("nil.debug.classLoading");
 	
 	private static final class EntrypointListener {
 		public final String id;

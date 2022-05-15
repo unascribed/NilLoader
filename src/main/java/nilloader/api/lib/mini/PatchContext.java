@@ -64,13 +64,15 @@ public class PatchContext {
 	 */
 	public class SearchResult {
 
-		private int start;
+		private AbstractInsnNode start;
+		private AbstractInsnNode end;
 		private AbstractInsnNode[] query;
 		private boolean reverse;
 		
-		protected SearchResult(int start, AbstractInsnNode[] query, boolean reverse) {
+		protected SearchResult(AbstractInsnNode start, AbstractInsnNode end, AbstractInsnNode[] query, boolean reverse) {
 			super();
 			this.start = start;
+			this.end = end;
 			this.query = query;
 			this.reverse = reverse;
 		}
@@ -81,7 +83,7 @@ public class PatchContext {
 		 * @return {@code true} if the search was successful
 		 */
 		public boolean isSuccessful() {
-			return start != -1;
+			return start != null;
 		}
 		
 		private void assertSuccessful() {
@@ -90,13 +92,19 @@ public class PatchContext {
 			}
 		}
 		
+		private void assertValid() {
+			if (!code.contains(start)) throw new IllegalStateException("The starting insn of this SearchResult has gone missing; repeat the search to update it");
+			if (!code.contains(end)) throw new IllegalStateException("The ending insn of this SearchResult has gone missing; repeat the search to update it");
+		}
+		
 		/**
 		 * Update the PatchContext's code pointer to just after the found code.
 		 * @throws NoSuchElementException if the search was unsuccessful
 		 */
 		public void jumpAfter() {
 			assertSuccessful();
-			setPointer(start+query.length);
+			assertValid();
+			setPointer(code.indexOf(end)+1);
 		}
 		
 		/**
@@ -105,7 +113,8 @@ public class PatchContext {
 		 */
 		public void jumpBefore() {
 			assertSuccessful();
-			setPointer(start-1);
+			assertValid();
+			setPointer(code.indexOf(start)-1);
 		}
 		
 		/**
@@ -116,7 +125,8 @@ public class PatchContext {
 		 */
 		public SearchResult next() {
 			assertSuccessful();
-			return searchFrom(start+query.length, query, reverse);
+			assertValid();
+			return searchFrom(reverse ? code.indexOf(start) : code.indexOf(end), query, reverse);
 		}
 		
 		/**
@@ -127,8 +137,10 @@ public class PatchContext {
 		@Deprecated
 		public void erase() {
 			assertSuccessful();
+			assertValid();
+			int startIdx = code.indexOf(start);
 			for (int i = 0; i < query.length; i++) {
-				PatchContext.this.erase(start);
+				PatchContext.this.erase(startIdx);
 			}
 		}
 		
@@ -163,6 +175,20 @@ public class PatchContext {
 	public AbstractInsnNode get() {
 		if (pointer == -1) throw new PointerNotSetException();
 		return code.get(pointer);
+	}
+	
+	/**
+	 * @return the current pointer into this method
+	 */
+	public int getPointer() {
+		return pointer;
+	}
+	
+	/**
+	 * @return the number of instructions in the method
+	 */
+	public int getLength() {
+		return code.size();
 	}
 	
 	public String getMethodName() {
@@ -349,10 +375,10 @@ public class PatchContext {
 				}
 			}
 			if (allMatched) {
-				return new SearchResult(k, nodes, reverse);
+				return new SearchResult(code.get(k), code.get(k+nodes.length-1), nodes, reverse);
 			}
 		}
-		return new SearchResult(-1, nodes, reverse);
+		return new SearchResult(null, null, nodes, reverse);
 	}
 
 	private boolean instructionsEqual(AbstractInsnNode a, AbstractInsnNode b) {
