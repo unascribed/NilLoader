@@ -354,7 +354,7 @@ public class QDCSS {
 	
 	private static final Pattern JUNK_PATTERN = Pattern.compile("^(\\s*(/\\*.*?\\*/)?\\s*)*$", Pattern.DOTALL);
 	private static final Pattern RULESET_PATTERN = Pattern.compile("[#.]?(@?\\w+?)\\s*\\{(.*?)\\}", Pattern.DOTALL);
-	private static final Pattern RULE_PATTERN = Pattern.compile("(\\S+?)\\s*:\\s*(?:\\\"(.*?)(?<!\\\\)\\\"|'(.*?)(?<!\\\\)'|(\\S)+?)\\s*(;|$)");
+	private static final Pattern RULE_PATTERN = Pattern.compile("(\\S+?)\\s*:\\s*(?:\\\"(.*?)(?<!\\\\)\\\"|'(.*?)(?<!\\\\)'|(\\S+?))\\s*(?:;|$)");
 	
 	public static QDCSS load(String fileName, String s) throws SyntaxErrorException {
 		// vanilla CSS is a very simple grammar, so we can parse it using only regexes
@@ -376,7 +376,14 @@ public class QDCSS {
 					throw new SyntaxErrorException("Expected a rule near line "+getLine(s, ruleset.start(2)+rule.start())+" in "+fileName);
 				}
 				String property = rule.group(1);
-				String value = rule.group(2);
+				String value;
+				if (rule.group(2) != null) {
+					value = rule.group(2);
+				} else if (rule.group(3) != null) {
+					value = rule.group(3);
+				} else {
+					value = rule.group(4);
+				}
 				String key = selector+"."+property;
 				if (!data.containsKey(key)) {
 					data.put(key, new ArrayList<>());
