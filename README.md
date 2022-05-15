@@ -39,7 +39,7 @@ ports to Beta 1.7, early versions of Forge, NFC, etc. That is, more or less, its
 
 ## Using NilLoader
 
-More comprehensive docs coming soon, but for now, check out [NilTest](https://git.sleeping.town/nil/NilTest)
+More comprehensive docs coming soon, but for now, check out [NilExample](https://git.sleeping.town/unascribed/NilExample)
 to write mods, and use [this PolyMC component JSON](https://unascribed.com/f/fe34706c/com.unascribed.nilloader.json)
 to install it. (Click "Add Empty" under versions, enter "NilLoader" and
 "com.unascribed.nilloader", then click Edit on the right, and replace the contents
