@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.io.PrintStream;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
+import java.lang.management.ManagementFactory;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
@@ -23,8 +24,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
-import java.util.zip.ZipEntry;
-
 import org.cadixdev.bombe.asm.analysis.ClassProviderInheritanceProvider;
 import org.cadixdev.bombe.asm.jar.ClassLoaderClassProvider;
 import org.cadixdev.bombe.type.signature.FieldSignature;
@@ -66,6 +65,7 @@ public class NilLoader {
 	private static final Map<String, List<EntrypointListener>> entrypointListeners = new HashMap<>();
 	private static final List<ClassTransformer> builtInTransformers = new ArrayList<>();
 	private static final List<ClassTransformer> transformers = new ArrayList<>();
+	private static final List<File> additionalClassPath = new ArrayList<>();
 	private static final Map<File, String> classSources = new LinkedHashMap<>();
 	private static final Map<URL, String> classSourceURLs = new LinkedHashMap<>();
 	
@@ -80,6 +80,10 @@ public class NilLoader {
 	private static boolean frozen = false;
 	
 	public static void premain(String arg, Instrumentation ins) {
+		if (premainCalled) {
+			// Multiple nilmods are being added as Java agents; don't reinit
+			return;
+		}
 		premainCalled = true;
 		if (DEBUG_CLASSLOADING) {
 			PrintStream err = System.err;
@@ -109,10 +113,28 @@ public class NilLoader {
 			throw new AssertionError(e);
 		}
 		NilLoaderLog.log.info("NilLoader v{} initialized, logging via {}", mods.get("nilloader").version, NilLoaderLog.log.getImplementationName());
+		File ourFile = null;
 		try {
-			discover(new File(NilLoader.class.getProtectionDomain().getCodeSource().getLocation().toURI()));
+			ourFile = new File(NilLoader.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+			discover(ourFile, false);
 		} catch (URISyntaxException | IllegalArgumentException e) {
 			NilLoaderLog.log.debug("Failed to discover additional nilmods in our jar", e);
+		}
+		for (String jvmArg : ManagementFactory.getRuntimeMXBean().getInputArguments()) {
+			if (jvmArg.startsWith("-javaagent:")) {
+				int equals = jvmArg.indexOf('=');
+				String file;
+				if (equals != -1) {
+					file = jvmArg.substring(11, equals);
+				} else {
+					file = jvmArg.substring(11);
+				}
+				File fileObj = new File(file);
+				if (ourFile != null && fileObj.getAbsoluteFile().equals(ourFile.getAbsoluteFile())) continue;
+				if (fileObj.exists()) {
+					discover(fileObj, false);
+				}
+			}
 		}
 		discoverDirectory(new File("mods"), "jar", "nilmod");
 		discoverDirectory(new File("nilmods"), "jar");
@@ -138,19 +160,17 @@ public class NilLoader {
 			File f = en.getKey();
 			try {
 				classSourceURLs.put(f.toURI().toURL(), en.getValue());
-				ins.appendToSystemClassLoaderSearch(new JarFile(f) {
-					@Override
-					public ZipEntry getEntry(String name) {
-						if (name != null) {
-							// we filter nilloader out of the class loader as nilloader is designed
-							// to be shadowed, but we don't want to have multiple versions of
-							// nilloader on the classpath
-							if (name.startsWith("/nilloader/")) return null;
-							if (name.startsWith("nilloader/")) return null;
-						}
-						return super.getEntry(name);
-					}
-				});
+			} catch (IOException e) {
+				NilLoaderLog.log.error("Failed to add {} to class map", f, e);
+			}
+		}
+		for (File f : additionalClassPath) {
+			try {
+				// This originally passed in a JarFile subclass that filtered its entries, but the
+				// JVM doesn't actually call any of the methods on JarFile. We can likely ignore
+				// the filtering as these get added with absolute minimum priority to the classpath.
+				// TODO: Is there any other way we can filter nilloader/* out of nilmod files?
+				ins.appendToSystemClassLoaderSearch(new JarFile(f));
 			} catch (IOException e) {
 				NilLoaderLog.log.error("Failed to add {} to classpath", f, e);
 			}
@@ -204,12 +224,12 @@ public class NilLoader {
 				}
 			}
 			if (match) {
-				discover(f);
+				discover(f, true);
 			}
 		}
 	}
 	
-	private static void discover(File file) {
+	private static void discover(File file, boolean addToClassPath) {
 		List<NilMetadata> found = new ArrayList<>();
 		Map<String, MappingSet> mappings = new HashMap<>();
 		try (JarFile jar = new JarFile(file)) {
@@ -255,6 +275,9 @@ public class NilLoader {
 			NilLoaderLog.log.warn("Failed to discover nilmods in {}", file, e);
 		}
 		if (!found.isEmpty()) {
+			if (addToClassPath) {
+				additionalClassPath.add(file);
+			}
 			for (NilMetadata meta : found) {
 				classSources.put(file, meta.id);
 				modMappings.put(meta.id, mappings);
