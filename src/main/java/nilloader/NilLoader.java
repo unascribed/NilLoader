@@ -72,19 +72,28 @@ public class NilLoader {
 	private static final Map<String, Map<String, MappingSet>> modMappings = new HashMap<>();
 	private static final Map<String, String> activeModMappings = new HashMap<>();
 	
+	private static ClassFileTransformer loadTracker;
+	
 	private static Set<String> loadedClasses = new HashSet<>();
 	
 	private static String activeMod = null;
-	private static boolean premainCalled = false;
+	private static int initializations = 0;
+	private static int nilAgents = 1;
 	
 	private static boolean frozen = false;
 	
 	public static void premain(String arg, Instrumentation ins) {
-		if (premainCalled) {
-			// Multiple nilmods are being added as Java agents; don't reinit
+		initializations++;
+		if (initializations > 1) {
+			NilLoaderLog.log.debug("Initializing for the {} time...", nth(initializations));
+			// Multiple nilmods are being added as Java agents; don't do a full reinit
+			// We need to delay performing final initialization until the last agent initializes to
+			// ensure all the agent jars are on the classpath
+			if (initializations == nilAgents) {
+				completePremain(ins);
+			}
 			return;
 		}
-		premainCalled = true;
 		if (DEBUG_CLASSLOADING) {
 			PrintStream err = System.err;
 			ins.addTransformer((loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
@@ -93,7 +102,7 @@ public class NilLoader {
 				return classfileBuffer;
 			}, ins.isRetransformClassesSupported());
 		}
-		ClassFileTransformer loadTracker = (loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
+		loadTracker = (loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
 			if (loadedClasses != null) loadedClasses.add(className);
 			return classfileBuffer;
 		};
@@ -132,7 +141,9 @@ public class NilLoader {
 				File fileObj = new File(file);
 				if (ourFile != null && fileObj.getAbsoluteFile().equals(ourFile.getAbsoluteFile())) continue;
 				if (fileObj.exists()) {
-					discover(fileObj, false);
+					if (discover(fileObj, false)) {
+						nilAgents++;
+					}
 				}
 			}
 		}
@@ -146,6 +157,30 @@ public class NilLoader {
 				entrypointListeners.get(en.getKey()).add(new EntrypointListener(meta.id, en.getValue()));
 			}
 		}
+		if (nilAgents == 1) {
+			completePremain(ins);
+		} else {
+			boolean singular = nilAgents == 2;
+			NilLoaderLog.log.debug("Discovered {} other NilLoader agent{}, waiting for {} to initialize before finishing initialization...",
+					nilAgents-1, singular ? "" : "s", singular ? "it" : "those");
+		}
+	}
+	
+	private static String nth(int n) {
+		String prefix = "";
+		if (n%100 >= 20) {
+			prefix = ""+(n/10);
+			n = n%10;
+		}
+		switch (n) {
+			case  1: return prefix+"1st";
+			case  2: return prefix+"2nd";
+			case  3: return prefix+"3rd";
+			default: return prefix+n+"th";
+		}
+	}
+
+	private static void completePremain(Instrumentation ins) {
 		StringBuilder discoveries = new StringBuilder();
 		for (NilMetadata meta : mods.values()) {
 			discoveries.append("\n\t- ");
@@ -206,7 +241,7 @@ public class NilLoader {
 			en.setValue(Collections.singletonMap(id, en.getValue().get(id)));
 		}
 	}
-	
+
 	private static void discoverDirectory(File dir, String... extensions) {
 		NilLoaderLog.log.debug("Searching for nilmods in ./{}", dir.getName());
 		String[] trailers = new String[extensions.length];
@@ -229,7 +264,7 @@ public class NilLoader {
 		}
 	}
 	
-	private static void discover(File file, boolean addToClassPath) {
+	private static boolean discover(File file, boolean addToClassPath) {
 		List<NilMetadata> found = new ArrayList<>();
 		Map<String, MappingSet> mappings = new HashMap<>();
 		try (JarFile jar = new JarFile(file)) {
@@ -283,7 +318,9 @@ public class NilLoader {
 				modMappings.put(meta.id, mappings);
 				install(meta);
 			}
+			return true;
 		}
+		return false;
 	}
 
 	private static void parseClassMapping(Function<String, ClassMapping<?, ?>> mappingCreator, JsonObject clazz) {
@@ -337,7 +374,7 @@ public class NilLoader {
 	}
 	
 	public static void fireEntrypoint(String entrypoint) {
-		if (!premainCalled) {
+		if (initializations == 0) {
 			NilLoaderLog.log.error("fireEntrypoint called on an uninitialized NilLoader; classloading shenanigans? I was loaded by {}", NilLoader.class.getClassLoader());
 			return;
 		}
