@@ -1,0 +1,12 @@
+{
+	"formatVersion": 1,
+	"name": "NilLoader",
+	"uid": "com.unascribed.nilloader",
+	"version": "${version}",
+	"+agents": [
+		{
+			"name": "com.unascribed:nilloader:${version}",
+			"url": "https://repo.sleeping.town"
+		}
+	]
+}

@@ -79,6 +79,14 @@ task sourcesJar(type: Jar) {
 	from sourceSets.main.allSource
 }
 
+task polymcJson(type: Copy) {
+	from('polymc.json') {
+		expand 'version': project.version
+	}
+
+	into 'build/libs'
+}
+
 publishing {
 	repositories {
 		maven {
@@ -96,9 +104,17 @@ publishing {
 			version = project.version
 			artifact shadowJar
 			artifact sourcesJar
+			artifact('build/libs/polymc.json') {
+				classifier 'polymc'
+			}
 		}
 	}
 }
 
+tasks.withType(AbstractPublishToMaven).each {
+	it.dependsOn tasks.polymcJson
+}
+
+tasks.build.dependsOn tasks.polymcJson
 tasks.build.dependsOn tasks.shadowJar
 tasks.build.dependsOn tasks.sourcesJar
