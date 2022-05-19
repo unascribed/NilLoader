@@ -17,6 +17,7 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -65,7 +66,8 @@ public class NilLoader {
 	private static final Map<String, List<EntrypointListener>> entrypointListeners = new HashMap<>();
 	private static final List<ClassTransformer> builtInTransformers = new ArrayList<>();
 	private static final List<ClassTransformer> transformers = new ArrayList<>();
-	private static final List<File> additionalClassPath = new ArrayList<>();
+	private static final Set<File> additionalSearchPath = new LinkedHashSet<>();
+	private static final Set<File> additionalClassPath = new LinkedHashSet<>();
 	private static final Map<File, String> classSources = new LinkedHashMap<>();
 	private static final Map<URL, String> classSourceURLs = new LinkedHashMap<>();
 	
@@ -125,6 +127,7 @@ public class NilLoader {
 		File ourFile = null;
 		try {
 			ourFile = new File(NilLoader.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+			additionalClassPath.add(ourFile);
 			discover(ourFile, false);
 		} catch (URISyntaxException | IllegalArgumentException e) {
 			NilLoaderLog.log.debug("Failed to discover additional nilmods in our jar", e);
@@ -191,6 +194,7 @@ public class NilLoader {
 			discoveries.append(meta.version);
 		}
 		NilLoaderLog.log.info("Discovered {} nilmod{}:{}", mods.size(), mods.size() == 1 ? "" : "s", discoveries);
+		StringBuilder javaClassPathAddn = new StringBuilder();
 		for (Map.Entry<File, String> en : classSources.entrySet()) {
 			File f = en.getKey();
 			try {
@@ -199,7 +203,7 @@ public class NilLoader {
 				NilLoaderLog.log.error("Failed to add {} to class map", f, e);
 			}
 		}
-		for (File f : additionalClassPath) {
+		for (File f : additionalSearchPath) {
 			try {
 				// This originally passed in a JarFile subclass that filtered its entries, but the
 				// JVM doesn't actually call any of the methods on JarFile. We can likely ignore
@@ -210,6 +214,10 @@ public class NilLoader {
 				NilLoaderLog.log.error("Failed to add {} to classpath", f, e);
 			}
 		}
+		for (File f : additionalClassPath) {
+			javaClassPathAddn.append(File.pathSeparator).append(f.getPath());
+		}
+		System.setProperty("java.class.path", System.getProperty("java.class.path")+javaClassPathAddn);
 		ins.addTransformer((loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
 			if (classBeingRedefined != null || className == null) return classfileBuffer;
 			if (protectionDomain != null && protectionDomain.getCodeSource() != null) {
@@ -264,7 +272,7 @@ public class NilLoader {
 		}
 	}
 	
-	private static boolean discover(File file, boolean addToClassPath) {
+	private static boolean discover(File file, boolean addToSearchPath) {
 		List<NilMetadata> found = new ArrayList<>();
 		Map<String, MappingSet> mappings = new HashMap<>();
 		try (JarFile jar = new JarFile(file)) {
@@ -310,9 +318,10 @@ public class NilLoader {
 			NilLoaderLog.log.warn("Failed to discover nilmods in {}", file, e);
 		}
 		if (!found.isEmpty()) {
-			if (addToClassPath) {
-				additionalClassPath.add(file);
+			if (addToSearchPath) {
+				additionalSearchPath.add(file);
 			}
+			additionalClassPath.add(file);
 			for (NilMetadata meta : found) {
 				classSources.put(file, meta.id);
 				modMappings.put(meta.id, mappings);
