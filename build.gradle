@@ -9,7 +9,7 @@ targetCompatibility = 8
 
 group = "com.unascribed"
 archivesBaseName = "NilLoader"
-version = "1.1.4"
+version = "1.1.5"
 
 tasks.withType(JavaCompile) {
 	options.release = 8
@@ -17,6 +17,12 @@ tasks.withType(JavaCompile) {
 
 repositories {
 	mavenCentral()
+	maven {
+		url 'https://maven.quiltmc.org/repository/release/'
+		content {
+			includeGroup 'org.quiltmc'
+		}
+	}
 }
 
 configurations {
@@ -35,6 +41,7 @@ dependencies {
 	
 	shade 'com.grack:nanojson:1.7'
 	
+	compileOnly 'org.quiltmc:quiltflower:1.8.1'
 	compileOnly 'org.slf4j:slf4j-api:1.7.9'
 	compileOnly 'org.apache.logging.log4j:log4j-api:2.17.1'
 	compileOnly 'log4j:log4j:1.2.17'

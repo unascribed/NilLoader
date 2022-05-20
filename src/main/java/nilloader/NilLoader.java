@@ -1,9 +1,11 @@
 package nilloader;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
@@ -11,6 +13,7 @@ import java.lang.management.ManagementFactory;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -31,6 +34,7 @@ import org.cadixdev.bombe.type.signature.FieldSignature;
 import org.cadixdev.bombe.type.signature.MethodSignature;
 import org.cadixdev.lorenz.MappingSet;
 import org.cadixdev.lorenz.asm.LorenzRemapper;
+import org.cadixdev.lorenz.io.srg.tsrg.TSrgReader;
 import org.cadixdev.lorenz.model.ClassMapping;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
@@ -40,6 +44,7 @@ import org.objectweb.asm.commons.ClassRemapper;
 import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParser;
+
 import nilloader.api.ClassTransformer;
 import nilloader.api.NilMetadata;
 import nilloader.api.lib.mini.MiniTransformer;
@@ -48,8 +53,13 @@ import nilloader.impl.fixes.RelaunchClassLoaderTransformer;
 
 public class NilLoader {
 
-	private static final boolean DUMP = Boolean.getBoolean("nil.debug.dump");
+	private static final boolean DEBUG_DUMP = Boolean.getBoolean("nil.debug.dump");
+	private static final boolean DEBUG_DECOMPILE = Boolean.getBoolean("nil.debug.decompile");
+	private static final boolean DEBUG_FLIP_DIR_LAYOUT = Boolean.getBoolean("nil.debug.dump.flipDirLayout") || Boolean.getBoolean("nil.debug.decompile.flipDirLayout");
 	private static final boolean DEBUG_CLASSLOADING = Boolean.getBoolean("nil.debug.classLoading");
+	private static final String DEBUG_MAPPINGS_PATH = System.getProperty("nil.debug.mappings");
+	
+	private static MappingSet debugMappings = null;
 	
 	private static final class EntrypointListener {
 		public final String id;
@@ -78,6 +88,8 @@ public class NilLoader {
 	
 	private static Set<String> loadedClasses = new HashSet<>();
 	
+	private static Instrumentation instrumentation;
+	
 	private static String activeMod = null;
 	private static int initializations = 0;
 	private static int nilAgents = 1;
@@ -96,6 +108,7 @@ public class NilLoader {
 			}
 			return;
 		}
+		instrumentation = ins;
 		if (DEBUG_CLASSLOADING) {
 			PrintStream err = System.err;
 			ins.addTransformer((loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
@@ -112,12 +125,22 @@ public class NilLoader {
 		builtInTransformers.add(new RelaunchClassLoaderTransformer());
 		ins.addTransformer((loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
 			if (classBeingRedefined != null || className == null) return classfileBuffer;
-			return NilLoader.transform(builtInTransformers, className, classfileBuffer);
+			return NilLoader.transform(loader, builtInTransformers, className, classfileBuffer);
 		});
 		for (Runnable r : NilLogManager.initLogs) {
 			r.run();
 		}
 		NilLogManager.initLogs.clear();
+		if (DEBUG_DECOMPILE) {
+			Decompiler.initialize();
+		}
+		if (DEBUG_MAPPINGS_PATH != null) {
+			try (InputStreamReader r = new InputStreamReader(new FileInputStream(new File(DEBUG_MAPPINGS_PATH)), StandardCharsets.UTF_8)) {
+				debugMappings = new TSrgReader(r).read();
+			} catch (IOException e) {
+				NilLoaderLog.log.error("Failed to load debug mappings", e);
+			}
+		}
 		try {
 			discover("nilloader", NilLoader.class.getClassLoader(), new File(NilLoader.class.getProtectionDomain().getCodeSource().getLocation().toURI()));
 		} catch (URISyntaxException e) {
@@ -226,28 +249,33 @@ public class NilLoader {
 					MappingSet mappings = getActiveMappings(definer);
 					if (mappings != null) {
 						NilLoaderLog.log.debug("Remapping mod class {} via mapping set {}", className, NilLoader.getActiveMappingId(definer));
-						ClassProviderInheritanceProvider cpip = new ClassProviderInheritanceProvider(Opcodes.ASM9, new ClassLoaderClassProvider(loader));
-						LorenzRemapper lr = new LorenzRemapper(mappings, cpip);
-						ClassReader reader = new ClassReader(classfileBuffer);
-						ClassWriter writer = new ClassWriter(reader, 0);
-						ClassRemapper cr = new ClassRemapper(writer, lr);
-						reader.accept(cr, 0);
-						classfileBuffer = writer.toByteArray();
+						classfileBuffer = remap(loader, classfileBuffer, mappings);
 					}
 				}
 			}
-			return NilLoader.transform(transformers, className, classfileBuffer);
+			return NilLoader.transform(loader, transformers, className, classfileBuffer);
 		});
 		fireEntrypoint("premain");
 		NilLoaderLog.log.debug("{} class transformer{} registered", transformers.size(), transformers.size() == 1 ? "" : "s");
 		frozen = true;
 		// clean up stuff we won't be using anymore
+		instrumentation = null;
 		ins.removeTransformer(loadTracker);
 		loadedClasses = null;
 		for (Map.Entry<String, Map<String, MappingSet>> en : modMappings.entrySet()) {
 			String id = getActiveMappingId(en.getKey());
 			en.setValue(Collections.singletonMap(id, en.getValue().get(id)));
 		}
+	}
+
+	private static byte[] remap(ClassLoader loader, byte[] clazz, MappingSet mappings) {
+		ClassProviderInheritanceProvider cpip = new ClassProviderInheritanceProvider(Opcodes.ASM9, new ClassLoaderClassProvider(loader));
+		LorenzRemapper lr = new LorenzRemapper(mappings, cpip);
+		ClassReader reader = new ClassReader(clazz);
+		ClassWriter writer = new ClassWriter(reader, 0);
+		ClassRemapper cr = new ClassRemapper(writer, lr);
+		reader.accept(cr, 0);
+		return writer.toByteArray();
 	}
 
 	private static void discoverDirectory(File dir, String... extensions) {
@@ -422,9 +450,9 @@ public class NilLoader {
 		NilLoaderLog.log.debug("Installing discovered mod {} (ID {}) v{} from {}", meta.name, meta.id, meta.version, meta.source);
 		mods.put(meta.id, meta);
 	}
-
-	public static byte[] transform(List<ClassTransformer> transformers, String className, byte[] classBytes) {
-		byte[] orig = DUMP ? classBytes : null;
+	
+	public static byte[] transform(ClassLoader loader, List<ClassTransformer> transformers, String className, byte[] classBytes) {
+		byte[] orig = DEBUG_DUMP || DEBUG_DECOMPILE ? classBytes : null;
 		try {
 			boolean changed = false;
 			for (ClassTransformer ct : transformers) {
@@ -436,24 +464,42 @@ public class NilLoader {
 					NilLoaderLog.log.error("Failed to transform {} via {}", className, ct.getClass().getName(), t);
 				}
 			}
-			if (changed && DUMP) {
-				writeDump(className, orig, "before");
-				writeDump(className, classBytes, "after");
+			if (changed) {
+				String dumpName = className;
+				byte[] before = orig;
+				byte[] after = classBytes;
+				if (debugMappings != null) {
+					try {
+						before = remap(loader, before, debugMappings);
+						after = remap(loader, after, debugMappings);
+						dumpName = debugMappings.computeClassMapping(dumpName).map(ClassMapping::getFullDeobfuscatedName).orElse(className).replace('/', '.');
+					} catch (Throwable t) {
+						NilLoaderLog.log.error("Failed to remap {}", className, t);
+					}
+				}
+				if (DEBUG_DUMP) {
+					writeDump(dumpName, before, "before", "class");
+					writeDump(dumpName, after, "after", "class");
+				}
+				if (DEBUG_DECOMPILE) {
+					Decompiler.perform(dumpName, before, after);
+				}
 			}
 			return classBytes;
 		} catch (RuntimeException t) {
-			if (DUMP) writeDump(className, orig, "before");
+			if (DEBUG_DUMP) writeDump(className, orig, "before", "class");
 			throw t;
 		} catch (Error e) {
-			if (DUMP) writeDump(className, orig, "before");
+			if (DEBUG_DUMP) writeDump(className, orig, "before", "class");
 			throw e;
 		}
 	}
 	
-	private static void writeDump(String className, byte[] classBytes, String what) {
-		File dir = new File(".nil/debug-out", className.replace('/', '.'));
+	static void writeDump(String className, byte[] classBytes, String what, String ext) {
+		String classNameDots = className.replace('/', '.');
+		File dir = new File(".nil/debug-out", DEBUG_FLIP_DIR_LAYOUT ? what : classNameDots);
 		dir.mkdirs();
-		File f = new File(dir, what+".class");
+		File f = new File(dir, (DEBUG_FLIP_DIR_LAYOUT ? classNameDots : what)+"."+ext);
 		try {
 			FileOutputStream fos = new FileOutputStream(f);
 			try {
@@ -462,7 +508,7 @@ public class NilLoader {
 				fos.close();
 			}
 		} catch (IOException e) {
-			NilLoaderLog.log.debug("Failed to write before class to {}", f, e);
+			NilLoaderLog.log.debug("Failed to write {} {} to {}", what, ext, f, e);
 		}
 	}
 	
@@ -528,6 +574,10 @@ public class NilLoader {
 
 	public static boolean isModLoaded(String id) {
 		return mods.containsKey(id);
+	}
+	
+	static void injectToSearchPath(JarFile file) {
+		instrumentation.appendToSystemClassLoaderSearch(file);
 	}
 	
 }
