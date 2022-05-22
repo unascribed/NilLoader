@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.function.Function;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -54,10 +56,14 @@ import nilloader.impl.fixes.RelaunchClassLoaderTransformer;
 public class NilLoader {
 
 	private static final boolean DEBUG_DUMP = Boolean.getBoolean("nil.debug.dump");
+	private static final boolean DEBUG_DUMP_MODREMAPPED = Boolean.getBoolean("nil.debug.dump.modRemapped");
 	private static final boolean DEBUG_DECOMPILE = Boolean.getBoolean("nil.debug.decompile");
+	private static final boolean DEBUG_DECOMPILE_MODREMAPPED = Boolean.getBoolean("nil.debug.decompile.modRemapped");
 	private static final boolean DEBUG_FLIP_DIR_LAYOUT = Boolean.getBoolean("nil.debug.dump.flipDirLayout") || Boolean.getBoolean("nil.debug.decompile.flipDirLayout");
 	private static final boolean DEBUG_CLASSLOADING = Boolean.getBoolean("nil.debug.classLoading");
 	private static final String DEBUG_MAPPINGS_PATH = System.getProperty("nil.debug.mappings");
+	
+	private static Executor decompilerThread;
 	
 	private static MappingSet debugMappings = null;
 	
@@ -131,8 +137,9 @@ public class NilLoader {
 			r.run();
 		}
 		NilLogManager.initLogs.clear();
-		if (DEBUG_DECOMPILE) {
+		if (DEBUG_DECOMPILE || DEBUG_DECOMPILE_MODREMAPPED) {
 			Decompiler.initialize();
+			decompilerThread = Executors.newSingleThreadExecutor(r -> new Thread(r, "NilLoader decompile thread"));
 		}
 		if (DEBUG_MAPPINGS_PATH != null) {
 			try (InputStreamReader r = new InputStreamReader(new FileInputStream(new File(DEBUG_MAPPINGS_PATH)), StandardCharsets.UTF_8)) {
@@ -250,6 +257,15 @@ public class NilLoader {
 					if (mappings != null) {
 						NilLoaderLog.log.debug("Remapping mod class {} via mapping set {}", className, NilLoader.getActiveMappingId(definer));
 						classfileBuffer = remap(loader, classfileBuffer, mappings);
+						if (DEBUG_DUMP_MODREMAPPED) {
+							writeDump(className, classfileBuffer, "modRemapped", "class");
+						}
+						if (DEBUG_DECOMPILE_MODREMAPPED) {
+							byte[] finalBys = classfileBuffer.clone();
+							decompilerThread.execute(() -> {
+								writeDump(className, Decompiler.decompile(className, finalBys).getBytes(StandardCharsets.UTF_8), "modRemapped", "java");
+							});
+						}
 					}
 				}
 			}
@@ -484,7 +500,13 @@ public class NilLoader {
 					writeDump(dumpName, after, "after", "class");
 				}
 				if (DEBUG_DECOMPILE) {
-					Decompiler.perform(dumpName, before, after);
+					String fdumpName = dumpName;
+					byte[] fbefore = before.clone();
+					byte[] fafter = after.clone();
+					decompilerThread.execute(() -> {
+						NilLoader.writeDump(fdumpName, Decompiler.decompile(fdumpName, fbefore).getBytes(StandardCharsets.UTF_8), "before", "java");
+						NilLoader.writeDump(fdumpName, Decompiler.decompile(fdumpName, fafter).getBytes(StandardCharsets.UTF_8), "after", "java");
+					});
 				}
 			}
 			return classBytes;

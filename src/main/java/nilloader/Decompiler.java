@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
@@ -154,15 +153,13 @@ class Decompiler {
 		}
 	}
 	
-	static void perform(String name, byte[] before, byte[] after) {
+	static String decompile(String name, byte[] bys) {
 		try {
-			if (failure) return;
-			String beforeCode = access.decompile(name, before);
-			String afterCode = access.decompile(name, after);
-			NilLoader.writeDump(name, beforeCode.getBytes(StandardCharsets.UTF_8), "before", "java");
-			NilLoader.writeDump(name, afterCode.getBytes(StandardCharsets.UTF_8), "after", "java");
+			if (failure) return "// decompiler failed to load";
+			return access.decompile(name, bys);
 		} catch (Throwable t) {
-			NilLoaderLog.log.error("Failed to perform decompile diff for {}", name, t);
+			NilLoaderLog.log.error("Failed to decompile {}", name, t);
+			return "// decompilation failed";
 		}
 	}
 
