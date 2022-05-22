@@ -434,6 +434,8 @@ public class NilLoader {
 					} else {
 						NilLoaderLog.log.error("Failed to invoke entrypoint {} for nilmod {}: Listener class {} is not an instance of Runnable", entrypoint, l.id, l.className);
 					}
+				} catch (ClassNotFoundException e) {
+					NilLoaderLog.log.error("Failed to invoke entrypoint {} for nilmod {} as the class {} does not exist", entrypoint, l.id, l.className);
 				} catch (Throwable t) {
 					NilLoaderLog.log.error("Failed to invoke entrypoint {} for nilmod {}", entrypoint, l.id, t);
 				} finally {

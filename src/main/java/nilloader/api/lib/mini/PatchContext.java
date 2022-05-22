@@ -114,7 +114,7 @@ public class PatchContext {
 		public void jumpBefore() {
 			assertSuccessful();
 			assertValid();
-			setPointer(code.indexOf(start)-1);
+			setPointer(code.indexOf(start));
 		}
 		
 		/**
