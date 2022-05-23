@@ -182,6 +182,12 @@ public class NilLoader {
 		}
 		discoverDirectory(new File("mods"), "jar", "nilmod");
 		discoverDirectory(new File("nilmods"), "jar");
+		String additional = System.getProperty("nil.discoverPath");
+		if (additional != null) {
+			for (String path : additional.split(File.pathSeparator)) {
+				discoverDirectory(new File(path), "jar");
+			}
+		}
 		for (NilMetadata meta : mods.values()) {
 			for (Map.Entry<String, String> en : meta.entrypoints.entrySet()) {
 				if (!entrypointListeners.containsKey(en.getKey())) {
