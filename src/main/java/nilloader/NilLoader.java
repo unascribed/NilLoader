@@ -39,7 +39,10 @@ import org.cadixdev.lorenz.asm.LorenzRemapper;
 import org.cadixdev.lorenz.io.srg.tsrg.TSrgReader;
 import org.cadixdev.lorenz.model.ClassMapping;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.FieldVisitor;
+import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.commons.ClassRemapper;
 
@@ -87,8 +90,12 @@ public class NilLoader {
 	private static final Map<File, String> classSources = new LinkedHashMap<>();
 	private static final Map<URL, String> classSourceURLs = new LinkedHashMap<>();
 	
+	private static final Map<String, Map<String, WidenSet>> modWidens = new HashMap<>();
 	private static final Map<String, Map<String, MappingSet>> modMappings = new HashMap<>();
 	private static final Map<String, String> activeModMappings = new HashMap<>();
+	
+	private static WidenSet finalWidens;
+	private static final Set<String> widenSubjects = new HashSet<>();
 	
 	private static ClassFileTransformer loadTracker;
 	
@@ -131,7 +138,7 @@ public class NilLoader {
 		builtInTransformers.add(new RelaunchClassLoaderTransformer());
 		ins.addTransformer((loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
 			if (classBeingRedefined != null || className == null) return classfileBuffer;
-			return NilLoader.transform(loader, builtInTransformers, className, classfileBuffer);
+			return NilLoader.transform(loader, className, classfileBuffer);
 		});
 		for (Runnable r : NilLogManager.initLogs) {
 			r.run();
@@ -275,7 +282,7 @@ public class NilLoader {
 					}
 				}
 			}
-			return NilLoader.transform(loader, transformers, className, classfileBuffer);
+			return classfileBuffer;
 		});
 		fireEntrypoint("premain");
 		NilLoaderLog.log.debug("{} class transformer{} registered", transformers.size(), transformers.size() == 1 ? "" : "s");
@@ -283,10 +290,49 @@ public class NilLoader {
 		// clean up stuff we won't be using anymore
 		instrumentation = null;
 		ins.removeTransformer(loadTracker);
-		loadedClasses = null;
 		for (Map.Entry<String, Map<String, MappingSet>> en : modMappings.entrySet()) {
 			String id = getActiveMappingId(en.getKey());
-			en.setValue(Collections.singletonMap(id, en.getValue().get(id)));
+			MappingSet ms = en.getValue().get(id);
+			if (ms != null) {
+				en.setValue(Collections.singletonMap(id, ms));
+			} else {
+				en.setValue(Collections.emptyMap());
+			}
+		}
+		// bake the widens
+		finalWidens = new WidenSet();
+		for (Map.Entry<String, Map<String, WidenSet>> en : modWidens.entrySet()) {
+			String id = getActiveMappingId(en.getKey());
+			WidenSet val = en.getValue().get(id);
+			if (val != null) {
+				finalWidens.widenClasses.addAll(val.widenClasses);
+				for (Map.Entry<String, Set<MethodSignature>> men : val.widenMethods.entrySet()) {
+					if (!finalWidens.widenMethods.containsKey(men.getKey())) {
+						finalWidens.widenMethods.put(men.getKey(), new HashSet<>());
+					}
+					finalWidens.widenMethods.get(men.getKey()).addAll(men.getValue());
+				}
+				for (Map.Entry<String, Set<FieldSignature>> fen : val.widenFields.entrySet()) {
+					if (!finalWidens.widenFields.containsKey(fen.getKey())) {
+						finalWidens.widenFields.put(fen.getKey(), new HashSet<>());
+					}
+					finalWidens.widenFields.get(fen.getKey()).addAll(fen.getValue());
+				}
+			}
+		}
+		checkWidenLoad(finalWidens.widenClasses);
+		checkWidenLoad(finalWidens.widenFields.keySet());
+		checkWidenLoad(finalWidens.widenMethods.keySet());
+		modWidens.clear();
+		loadedClasses = null;
+	}
+
+	private static void checkWidenLoad(Set<String> classes) {
+		widenSubjects.addAll(classes);
+		for (String s : classes) {
+			if (loadedClasses.contains(s)) {
+				NilLoaderLog.log.warn("Can't widen access of {} as it was loaded prematurely! Expect fireworks!", s);
+			}
 		}
 	}
 
@@ -325,6 +371,7 @@ public class NilLoader {
 	private static boolean discover(File file, boolean addToSearchPath) {
 		List<NilMetadata> found = new ArrayList<>();
 		Map<String, MappingSet> mappings = new HashMap<>();
+		Map<String, WidenSet> widens = new HashMap<>();
 		try (JarFile jar = new JarFile(file)) {
 			Enumeration<JarEntry> iter = jar.entries();
 			while (iter.hasMoreElements()) {
@@ -355,6 +402,43 @@ public class NilLoader {
 											}
 										}
 									}
+									JsonObject widen = mobj.getObject("widen");
+									if (widen != null) {
+										WidenSet ws = new WidenSet();
+										JsonArray wclasses = widen.getArray("classes");
+										if (wclasses != null) {
+											for (Object clazz : wclasses) {
+												if (clazz instanceof String) ws.widenClasses.add(clazz.toString());
+											}
+										}
+										JsonArray wmethods = widen.getArray("methods");
+										if (wmethods != null) {
+											for (Object o : wmethods) {
+												if (o instanceof JsonObject) {
+													JsonObject m = (JsonObject)o;
+													String owner = m.getString("owner");
+													if (!ws.widenMethods.containsKey(owner)) {
+														ws.widenMethods.put(owner, new HashSet<>());
+													}
+													ws.widenMethods.get(owner).add(MethodSignature.of(m.getString("sig")));
+												}
+											}
+										}
+										JsonArray wfields = widen.getArray("fields");
+										if (wfields != null) {
+											for (Object o : wfields) {
+												if (o instanceof JsonObject) {
+													JsonObject m = (JsonObject)o;
+													String owner = m.getString("owner");
+													if (!ws.widenFields.containsKey(owner)) {
+														ws.widenFields.put(owner, new HashSet<>());
+													}
+													ws.widenFields.get(owner).add(parseFieldSignature(m.getString("sig")));
+												}
+											}
+										}
+										widens.put(mapping.getKey(), ws);
+									}
 									mappings.put(mapping.getKey(), ms);
 								}
 							}
@@ -375,6 +459,7 @@ public class NilLoader {
 			for (NilMetadata meta : found) {
 				classSources.put(file, meta.id);
 				modMappings.put(meta.id, mappings);
+				modWidens.put(meta.id, widens);
 				install(meta);
 			}
 			return true;
@@ -475,18 +560,69 @@ public class NilLoader {
 		mods.put(meta.id, meta);
 	}
 	
-	public static byte[] transform(ClassLoader loader, List<ClassTransformer> transformers, String className, byte[] classBytes) {
+	private static int makePublic(int access) {
+		return (access & ~(Opcodes.ACC_PRIVATE|Opcodes.ACC_PROTECTED)) | Opcodes.ACC_PUBLIC;
+	}
+	
+	public static byte[] transform(ClassLoader loader, String className, byte[] classBytes) {
 		byte[] orig = DEBUG_DUMP || DEBUG_DECOMPILE ? classBytes : null;
 		try {
 			boolean changed = false;
+			for (ClassTransformer ct : builtInTransformers) {
+				try {
+					if ((classBytes = ct.transform(className, classBytes)) != orig) {
+						changed = true;
+					}
+				} catch (Throwable t) {
+					NilLoaderLog.log.error("Failed to transform {} via built-in transformer {}", className, ct.getClass().getName(), t);
+				}
+			}
 			for (ClassTransformer ct : transformers) {
 				try {
 					if ((classBytes = ct.transform(className, classBytes)) != orig) {
 						changed = true;
 					}
 				} catch (Throwable t) {
-					NilLoaderLog.log.error("Failed to transform {} via {}", className, ct.getClass().getName(), t);
+					NilLoaderLog.log.error("Failed to transform {} via mod transformer {}", className, ct.getClass().getName(), t);
 				}
+			}
+			if (widenSubjects.contains(className)) {
+				NilLoaderLog.log.debug("Applying widening to {}", className);
+				Set<FieldSignature> fields = finalWidens.widenFields.getOrDefault(className, Collections.emptySet());
+				Set<MethodSignature> methods = finalWidens.widenMethods.getOrDefault(className, Collections.emptySet());
+				ClassReader cr = new ClassReader(classBytes);
+				ClassWriter cw = new ClassWriter(cr, 0);
+				cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
+					@Override
+					public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
+						if (finalWidens.widenClasses.contains(name)) {
+							NilLoaderLog.log.debug("Making class {} public", name);
+							access = makePublic(access);
+						}
+						super.visit(version, access, name, signature, superName, interfaces);
+					}
+					
+					@Override
+					public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
+						if (methods.contains(MethodSignature.of(name, descriptor))) {
+							NilLoaderLog.log.debug("Making method {}.{}{} public", className, name, descriptor);
+							access = makePublic(access);
+						}
+						return super.visitMethod(access, name, descriptor, signature, exceptions);
+					}
+					
+					@Override
+					public FieldVisitor visitField(int access, String name, String descriptor, String signature, Object value) {
+						if (fields.contains(FieldSignature.of(name, descriptor))) {
+							NilLoaderLog.log.debug("Making field {}.{}:{} public", className, name, descriptor);
+							access = makePublic(access);
+						}
+						return super.visitField(access, name, descriptor, signature, value);
+					}
+					
+				}, 0);
+				changed = true;
+				classBytes = cw.toByteArray();
 			}
 			if (changed) {
 				String dumpName = className;
@@ -516,12 +652,10 @@ public class NilLoader {
 				}
 			}
 			return classBytes;
-		} catch (RuntimeException t) {
+		} catch (Throwable t) {
 			if (DEBUG_DUMP) writeDump(className, orig, "before", "class");
-			throw t;
-		} catch (Error e) {
-			if (DEBUG_DUMP) writeDump(className, orig, "before", "class");
-			throw e;
+			NilLoaderLog.log.error("Error while transforming {}", className, t);
+			return classBytes;
 		}
 	}
 	
