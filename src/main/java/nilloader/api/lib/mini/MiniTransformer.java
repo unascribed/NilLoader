@@ -117,7 +117,12 @@ public abstract class MiniTransformer implements ClassTransformer {
 	}
 	
 	@Override
-	public final byte[] transform(String className, byte[] basicClass) {
+	public final byte[] transform(String className, byte[] originalData) {
+		return transform(ClassLoader.getSystemClassLoader(), className, originalData);
+	}
+	
+	@Override
+	public final byte[] transform(ClassLoader loader, String className, byte[] basicClass) {
 		className = className.replace('.', '/');
 		if (!classTargetName.equals(className)) return basicClass;
 		
@@ -180,7 +185,12 @@ public abstract class MiniTransformer implements ClassTransformer {
 		if (frames) {
 			flags |= ClassWriter.COMPUTE_FRAMES;
 		}
-		ClassWriter writer = new ClassWriter(flags);
+		ClassWriter writer = new ClassWriter(flags) {
+			@Override
+			protected ClassLoader getClassLoader() {
+				return loader;
+			}
+		};
 		clazz.accept(writer);
 		return writer.toByteArray();
 	}

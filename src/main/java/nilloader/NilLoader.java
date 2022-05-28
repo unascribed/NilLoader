@@ -54,6 +54,8 @@ import nilloader.api.ClassTransformer;
 import nilloader.api.NilMetadata;
 import nilloader.api.lib.mini.MiniTransformer;
 import nilloader.api.lib.qdcss.QDCSS;
+import nilloader.impl.fixes.NewKnotClassLoaderTransformer;
+import nilloader.impl.fixes.OldKnotClassLoaderTransformer;
 import nilloader.impl.fixes.RelaunchClassLoaderTransformer;
 
 public class NilLoader {
@@ -135,7 +137,12 @@ public class NilLoader {
 			return classfileBuffer;
 		};
 		ins.addTransformer(loadTracker);
+		
+		// TODO it'd be nice to do this in a more generic way instead of needing loader-specific hacks
 		builtInTransformers.add(new RelaunchClassLoaderTransformer());
+		builtInTransformers.add(new NewKnotClassLoaderTransformer());
+		builtInTransformers.add(new OldKnotClassLoaderTransformer());
+		
 		ins.addTransformer((loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
 			if (classBeingRedefined != null || className == null) return classfileBuffer;
 			return NilLoader.transform(loader, className, classfileBuffer);
@@ -347,7 +354,7 @@ public class NilLoader {
 	}
 
 	private static void discoverDirectory(File dir, String... extensions) {
-		NilLoaderLog.log.debug("Searching for nilmods in ./{}", dir.getName());
+		NilLoaderLog.log.debug("Searching for nilmods in {}", dir.getPath());
 		String[] trailers = new String[extensions.length];
 		for (int i = 0; i < extensions.length; i++) {
 			trailers[i] = "."+extensions[i];
@@ -570,7 +577,7 @@ public class NilLoader {
 			boolean changed = false;
 			for (ClassTransformer ct : builtInTransformers) {
 				try {
-					if ((classBytes = ct.transform(className, classBytes)) != orig) {
+					if ((classBytes = ct.transform(loader, className, classBytes)) != orig) {
 						changed = true;
 					}
 				} catch (Throwable t) {
@@ -579,7 +586,7 @@ public class NilLoader {
 			}
 			for (ClassTransformer ct : transformers) {
 				try {
-					if ((classBytes = ct.transform(className, classBytes)) != orig) {
+					if ((classBytes = ct.transform(loader, className, classBytes)) != orig) {
 						changed = true;
 					}
 				} catch (Throwable t) {
@@ -591,7 +598,12 @@ public class NilLoader {
 				Set<FieldSignature> fields = finalWidens.widenFields.getOrDefault(className, Collections.emptySet());
 				Set<MethodSignature> methods = finalWidens.widenMethods.getOrDefault(className, Collections.emptySet());
 				ClassReader cr = new ClassReader(classBytes);
-				ClassWriter cw = new ClassWriter(cr, 0);
+				ClassWriter cw = new ClassWriter(cr, 0) {
+					@Override
+					protected ClassLoader getClassLoader() {
+						return loader;
+					}
+				};
 				cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
 					@Override
 					public void visit(int version, int access, String name, String signature, String superName, String[] interfaces) {
@@ -698,14 +710,26 @@ public class NilLoader {
 	
 	public static String getDefiningMod(URL codeSource) {
 		String raw = classSourceURLs.get(codeSource);
-		if (raw == null && "jar".equals(codeSource.getProtocol())) {
-			String str = codeSource.toString().substring(4);
-			int bang = str.indexOf('!');
-			if (bang != -1) str = str.substring(0, bang);
-			try {
-				return getDefiningMod(new URL(str));
-			} catch (MalformedURLException e) {
-				return null;
+		if (raw == null) {
+			if ("jar".equals(codeSource.getProtocol())) {
+				String str = codeSource.toString().substring(4);
+				int bang = str.indexOf('!');
+				if (bang != -1) str = str.substring(0, bang);
+				try {
+					return getDefiningMod(new URL(str));
+				} catch (MalformedURLException e) {
+					return null;
+				}
+			} else if ("union".equals(codeSource.getProtocol())) {
+				// some ModLauncher nonsense
+				String str = codeSource.toString().substring(6);
+				int bullshit = str.indexOf("%23");
+				if (bullshit != -1) str = str.substring(0, bullshit);
+				try {
+					return getDefiningMod(new URL("file:"+str));
+				} catch (MalformedURLException e) {
+					return null;
+				}
 			}
 		}
 		return raw;

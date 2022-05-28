@@ -15,6 +15,10 @@ public interface ClassTransformer {
 		NilLoader.registerTransformer(transformer);
 	}
 	
+	default byte[] transform(ClassLoader loader, String className, byte[] originalData) {
+		return transform(className, originalData);
+	}
+	
 	byte[] transform(String className, byte[] originalData);
 	
 }
