@@ -64,6 +64,7 @@ public class NilLoader {
 	private static final boolean DEBUG_DUMP_MODREMAPPED = Boolean.getBoolean("nil.debug.dump.modRemapped");
 	private static final boolean DEBUG_DECOMPILE = Boolean.getBoolean("nil.debug.decompile");
 	private static final boolean DEBUG_DECOMPILE_MODREMAPPED = Boolean.getBoolean("nil.debug.decompile.modRemapped");
+	private static final boolean DEBUG_DUMP_ALL = Boolean.getBoolean("nil.debug.dump.all");
 	private static final boolean DEBUG_FLIP_DIR_LAYOUT = Boolean.getBoolean("nil.debug.dump.flipDirLayout") || Boolean.getBoolean("nil.debug.decompile.flipDirLayout");
 	private static final boolean DEBUG_CLASSLOADING = Boolean.getBoolean("nil.debug.classLoading");
 	private static final String DEBUG_MAPPINGS_PATH = System.getProperty("nil.debug.mappings");
@@ -344,7 +345,7 @@ public class NilLoader {
 	}
 
 	private static byte[] remap(ClassLoader loader, byte[] clazz, MappingSet mappings) {
-		ClassProviderInheritanceProvider cpip = new ClassProviderInheritanceProvider(Opcodes.ASM9, new ClassLoaderClassProvider(loader));
+		ClassProviderInheritanceProvider cpip = new ClassProviderInheritanceProvider(Opcodes.ASM9, new ClassLoaderClassProvider(loader == null ? ClassLoader.getSystemClassLoader() : loader));
 		LorenzRemapper lr = new LorenzRemapper(mappings, cpip);
 		ClassReader reader = new ClassReader(clazz);
 		ClassWriter writer = new ClassWriter(reader, 0);
@@ -575,6 +576,7 @@ public class NilLoader {
 		byte[] orig = DEBUG_DUMP || DEBUG_DECOMPILE ? classBytes : null;
 		try {
 			boolean changed = false;
+			boolean failed = false;
 			for (ClassTransformer ct : builtInTransformers) {
 				try {
 					if ((classBytes = ct.transform(loader, className, classBytes)) != orig) {
@@ -582,6 +584,7 @@ public class NilLoader {
 					}
 				} catch (Throwable t) {
 					NilLoaderLog.log.error("Failed to transform {} via built-in transformer {}", className, ct.getClass().getName(), t);
+					failed = true;
 				}
 			}
 			for (ClassTransformer ct : transformers) {
@@ -591,6 +594,7 @@ public class NilLoader {
 					}
 				} catch (Throwable t) {
 					NilLoaderLog.log.error("Failed to transform {} via mod transformer {}", className, ct.getClass().getName(), t);
+					failed = true;
 				}
 			}
 			if (widenSubjects.contains(className)) {
@@ -658,10 +662,22 @@ public class NilLoader {
 					byte[] fbefore = before.clone();
 					byte[] fafter = after.clone();
 					decompilerThread.execute(() -> {
-						NilLoader.writeDump(fdumpName, Decompiler.decompile(fdumpName, fbefore).getBytes(StandardCharsets.UTF_8), "before", "java");
-						NilLoader.writeDump(fdumpName, Decompiler.decompile(fdumpName, fafter).getBytes(StandardCharsets.UTF_8), "after", "java");
+						writeDump(fdumpName, Decompiler.decompile(fdumpName, fbefore).getBytes(StandardCharsets.UTF_8), "before", "java");
+						writeDump(fdumpName, Decompiler.decompile(fdumpName, fafter).getBytes(StandardCharsets.UTF_8), "after", "java");
 					});
 				}
+			} else if (DEBUG_DUMP_ALL || failed) {
+				String dumpName = className;
+				byte[] bys = classBytes;
+				if (debugMappings != null && !className.startsWith("java/") && !className.startsWith("sun/") && !className.startsWith("javax/")) {
+					try {
+						bys = remap(loader, bys, debugMappings);
+						dumpName = debugMappings.computeClassMapping(dumpName).map(ClassMapping::getFullDeobfuscatedName).orElse(className).replace('/', '.');
+					} catch (Throwable t) {
+						NilLoaderLog.log.error("Failed to remap {}", className, t);
+					}
+				}
+				writeDump(dumpName, bys, failed ? "before" : "unchanged", "class");
 			}
 			return classBytes;
 		} catch (Throwable t) {

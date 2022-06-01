@@ -28,6 +28,7 @@ package nilloader.api.lib.mini.annotation;
 
 import static java.lang.annotation.ElementType.METHOD;
 import static java.lang.annotation.ElementType.TYPE;
+import static java.lang.annotation.RetentionPolicy.SOURCE;
 import static java.lang.annotation.RetentionPolicy.RUNTIME;
 
 import java.lang.annotation.Documented;
@@ -35,12 +36,16 @@ import java.lang.annotation.Repeatable;
 import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
-public final class Patch {
+/**
+ * This class is an annotation so it will appear in IDE autocomplete. Patch on its own is not
+ * useful; it's a holder for other annotations.
+ */
+@Retention(SOURCE)
+@Target({TYPE, METHOD})
+public @interface Patch {
 
 	/**
-	 * Flags a MiniTransformer as affecting the given class. Can be specified
-	 * multiple times; beware that in that case, all your patch methods will
-	 * scan each class for methods meeting the criteria.
+	 * Flags a MiniTransformer as affecting the given class.
 	 */
 	@Documented
 	@Retention(RUNTIME)

@@ -116,6 +116,18 @@ public abstract class MiniTransformer implements ClassTransformer {
 		return classTargetName;
 	}
 	
+	/**
+	 * Override point to perform modifications to a class that Mini's method patching is not sufficient
+	 * for. This can be used to add entirely new methods, add interfaces, add fields, etc.
+	 * <p>
+	 * <b>Mini and NilGradle will not be aware of what you are doing in this method, and therefore
+	 * <i>no remapping will occur</i>!</b>
+	 * @return {@code true} if frames need to be computed
+	 */
+	protected boolean modifyClassStructure(ClassNode clazz) {
+		return false;
+	}
+	
 	@Override
 	public final byte[] transform(String className, byte[] originalData) {
 		return transform(ClassLoader.getSystemClassLoader(), className, originalData);
@@ -130,7 +142,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 		ClassNode clazz = new ClassNode();
 		reader.accept(clazz, 0);
 		
-		boolean frames = false;
+		boolean frames = modifyClassStructure(clazz);
 		
 		List<String> foundMethods = new ArrayList<String>();
 		Set<String> requiredsNotSeen = new HashSet<String>(requiredMethods.size());
@@ -270,7 +282,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * Do nothing.
 	 */
-	protected InsnNode NOP() {
+	protected final InsnNode NOP() {
 		return new InsnNode(NOP);
 	}
 
@@ -279,7 +291,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * Push the null object reference onto the operand stack.
 	 */
-	protected InsnNode ACONST_NULL() {
+	protected final InsnNode ACONST_NULL() {
 		return new InsnNode(ACONST_NULL);
 	}
 
@@ -288,7 +300,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * Push the int constant -1 onto the operand stack.
 	 */
-	protected InsnNode ICONST_M1() {
+	protected final InsnNode ICONST_M1() {
 		return new InsnNode(ICONST_M1);
 	}
 
@@ -297,7 +309,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * Push the int constant 0 onto the operand stack.
 	 */
-	protected InsnNode ICONST_0() {
+	protected final InsnNode ICONST_0() {
 		return new InsnNode(ICONST_0);
 	}
 
@@ -306,7 +318,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * Push the int constant 1 onto the operand stack.
 	 */
-	protected InsnNode ICONST_1() {
+	protected final InsnNode ICONST_1() {
 		return new InsnNode(ICONST_1);
 	}
 
@@ -315,7 +327,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * Push the int constant 2 onto the operand stack.
 	 */
-	protected InsnNode ICONST_2() {
+	protected final InsnNode ICONST_2() {
 		return new InsnNode(ICONST_2);
 	}
 
@@ -324,7 +336,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * Push the int constant 3 onto the operand stack.
 	 */
-	protected InsnNode ICONST_3() {
+	protected final InsnNode ICONST_3() {
 		return new InsnNode(ICONST_3);
 	}
 
@@ -333,7 +345,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * Push the int constant 4 onto the operand stack.
 	 */
-	protected InsnNode ICONST_4() {
+	protected final InsnNode ICONST_4() {
 		return new InsnNode(ICONST_4);
 	}
 
@@ -342,7 +354,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * Push the int constant 5 onto the operand stack.
 	 */
-	protected InsnNode ICONST_5() {
+	protected final InsnNode ICONST_5() {
 		return new InsnNode(ICONST_5);
 	}
 
@@ -351,7 +363,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * Push the long constant 0 onto the operand stack.
 	 */
-	protected InsnNode LCONST_0() {
+	protected final InsnNode LCONST_0() {
 		return new InsnNode(LCONST_0);
 	}
 
@@ -360,7 +372,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * Push the long constant 1 onto the operand stack.
 	 */
-	protected InsnNode LCONST_1() {
+	protected final InsnNode LCONST_1() {
 		return new InsnNode(LCONST_1);
 	}
 
@@ -369,7 +381,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * Push the float constant 0 onto the operand stack.
 	 */
-	protected InsnNode FCONST_0() {
+	protected final InsnNode FCONST_0() {
 		return new InsnNode(FCONST_0);
 	}
 
@@ -378,7 +390,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * Push the float constant 1 onto the operand stack.
 	 */
-	protected InsnNode FCONST_1() {
+	protected final InsnNode FCONST_1() {
 		return new InsnNode(FCONST_1);
 	}
 
@@ -387,7 +399,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * Push the float constant 2 onto the operand stack.
 	 */
-	protected InsnNode FCONST_2() {
+	protected final InsnNode FCONST_2() {
 		return new InsnNode(FCONST_2);
 	}
 
@@ -396,7 +408,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * Push the double constant 0 onto the operand stack.
 	 */
-	protected InsnNode DCONST_0() {
+	protected final InsnNode DCONST_0() {
 		return new InsnNode(DCONST_0);
 	}
 
@@ -405,7 +417,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * Push the double constant 1 onto the operand stack.
 	 */
-	protected InsnNode DCONST_1() {
+	protected final InsnNode DCONST_1() {
 		return new InsnNode(DCONST_1);
 	}
 
@@ -414,7 +426,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * The immediate byte is sign-extended to an int value. That value is pushed onto the operand stack.
 	 */
-	protected IntInsnNode BIPUSH(int i) {
+	protected final IntInsnNode BIPUSH(int i) {
 		if (i < Byte.MIN_VALUE || i > Byte.MAX_VALUE) throw new IllegalArgumentException("Value out of range: "+i);
 		return new IntInsnNode(BIPUSH, i);
 	}
@@ -424,7 +436,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * The immediate short is sign-extended to an int value. That value is pushed onto the operand stack.
 	 */
-	protected IntInsnNode SIPUSH(int i) {
+	protected final IntInsnNode SIPUSH(int i) {
 		if (i < Short.MIN_VALUE || i > Short.MAX_VALUE) throw new IllegalArgumentException("Value out of range: "+i);
 		return new IntInsnNode(SIPUSH, i);
 	}
@@ -435,7 +447,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The int is stored in the constant pool, and upon execution of the instruction, is pushed onto
 	 * the operand stack.
 	 */
-	protected LdcInsnNode LDC(int v) {
+	protected final LdcInsnNode LDC(int v) {
 		return new LdcInsnNode(v);
 	}
 
@@ -449,7 +461,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * set because a constant of type float in the constant pool must be taken from the float value
 	 * set.
 	 */
-	protected LdcInsnNode LDC(float v) {
+	protected final LdcInsnNode LDC(float v) {
 		return new LdcInsnNode(v);
 	}
 
@@ -459,7 +471,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The long is stored in the constant pool, and upon execution of the instruction, is pushed
 	 * onto the operand stack.
 	 */
-	protected LdcInsnNode LDC(long v) {
+	protected final LdcInsnNode LDC(long v) {
 		return new LdcInsnNode(v);
 	}
 
@@ -469,7 +481,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The double is stored in the constant pool, and upon execution of the instruction, is pushed
 	 * onto the operand stack.
 	 */
-	protected LdcInsnNode LDC(double v) {
+	protected final LdcInsnNode LDC(double v) {
 		return new LdcInsnNode(v);
 	}
 
@@ -479,7 +491,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The String is stored in the constant pool, and upon execution of the instruction, is pushed
 	 * onto the operand stack.
 	 */
-	protected LdcInsnNode LDC(String v) {
+	protected final LdcInsnNode LDC(String v) {
 		return new LdcInsnNode(v);
 	}
 
@@ -490,7 +502,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * the reference is resolved. If successful, the reference is pushed onto the operand stack when
 	 * this instruction is executed. Otherwise, an exception is thrown during linking.
 	 */
-	protected LdcInsnNode LDC(Type v) {
+	protected final LdcInsnNode LDC(Type v) {
 		return new LdcInsnNode(v);
 	}
 
@@ -504,7 +516,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If the index is greater than 255, ASM will automatically wrap this insn in a WIDE insn
 	 * to allow further local variables.
 	 */
-	protected VarInsnNode ILOAD(int var) {
+	protected final VarInsnNode ILOAD(int var) {
 		return new VarInsnNode(ILOAD, var);
 	}
 
@@ -518,7 +530,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If the index is greater than 255, ASM will automatically wrap this insn in a WIDE insn
 	 * to allow further local variables.
 	 */
-	protected VarInsnNode LLOAD(int var) {
+	protected final VarInsnNode LLOAD(int var) {
 		return new VarInsnNode(LLOAD, var);
 	}
 
@@ -532,7 +544,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If the index is greater than 255, ASM will automatically wrap this insn in a WIDE insn
 	 * to allow further local variables.
 	 */
-	protected VarInsnNode FLOAD(int var) {
+	protected final VarInsnNode FLOAD(int var) {
 		return new VarInsnNode(FLOAD, var);
 	}
 
@@ -546,7 +558,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If the index is greater than 255, ASM will automatically wrap this insn in a WIDE insn
 	 * to allow further local variables.
 	 */
-	protected VarInsnNode DLOAD(int var) {
+	protected final VarInsnNode DLOAD(int var) {
 		return new VarInsnNode(DLOAD, var);
 	}
 	
@@ -560,7 +572,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If the index is greater than 255, ASM will automatically wrap this insn in a WIDE insn
 	 * to allow further local variables.
 	 */
-	protected VarInsnNode ALOAD(int var) {
+	protected final VarInsnNode ALOAD(int var) {
 		return new VarInsnNode(ALOAD, var);
 	}
 
@@ -575,7 +587,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws ArrayIndexOutOfBoundsException if index is not within the bounds of the array
 	 * 		referenced by arrayref
 	 */
-	protected InsnNode IALOAD() {
+	protected final InsnNode IALOAD() {
 		return new InsnNode(IALOAD);
 	}
 
@@ -590,7 +602,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws ArrayIndexOutOfBoundsException if index is not within the bounds of the array
 	 * 		referenced by arrayref
 	 */
-	protected InsnNode LALOAD() {
+	protected final InsnNode LALOAD() {
 		return new InsnNode(LALOAD);
 	}
 
@@ -605,7 +617,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws ArrayIndexOutOfBoundsException if index is not within the bounds of the array
 	 * 		referenced by arrayref
 	 */
-	protected InsnNode FALOAD() {
+	protected final InsnNode FALOAD() {
 		return new InsnNode(FALOAD);
 	}
 
@@ -620,7 +632,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws ArrayIndexOutOfBoundsException if index is not within the bounds of the array
 	 * 		referenced by arrayref
 	 */
-	protected InsnNode DALOAD() {
+	protected final InsnNode DALOAD() {
 		return new InsnNode(DALOAD);
 	}
 
@@ -635,7 +647,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws ArrayIndexOutOfBoundsException if index is not within the bounds of the array
 	 * 		referenced by arrayref
 	 */
-	protected InsnNode AALOAD() {
+	protected final InsnNode AALOAD() {
 		return new InsnNode(AALOAD);
 	}
 
@@ -650,7 +662,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws ArrayIndexOutOfBoundsException if index is not within the bounds of the array
 	 * 		referenced by arrayref
 	 */
-	protected InsnNode BALOAD() {
+	protected final InsnNode BALOAD() {
 		return new InsnNode(BALOAD);
 	}
 	
@@ -665,7 +677,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws ArrayIndexOutOfBoundsException if index is not within the bounds of the array
 	 * 		referenced by arrayref
 	 */
-	protected InsnNode CALOAD() {
+	protected final InsnNode CALOAD() {
 		return new InsnNode(CALOAD);
 	}
 
@@ -680,7 +692,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws ArrayIndexOutOfBoundsException if index is not within the bounds of the array
 	 * 		referenced by arrayref
 	 */
-	protected InsnNode SALOAD() {
+	protected final InsnNode SALOAD() {
 		return new InsnNode(SALOAD);
 	}
 
@@ -694,7 +706,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If the index is greater than 255, ASM will automatically wrap this insn in a WIDE insn
 	 * to allow further local variables.
 	 */
-	protected VarInsnNode ISTORE(int var) {
+	protected final VarInsnNode ISTORE(int var) {
 		return new VarInsnNode(ISTORE, var);
 	}
 
@@ -708,7 +720,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If the index is greater than 255, ASM will automatically wrap this insn in a WIDE insn
 	 * to allow further local variables.
 	 */
-	protected VarInsnNode LSTORE(int var) {
+	protected final VarInsnNode LSTORE(int var) {
 		return new VarInsnNode(LSTORE, var);
 	}
 
@@ -722,7 +734,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If the index is greater than 255, ASM will automatically wrap this insn in a WIDE insn
 	 * to allow further local variables.
 	 */
-	protected VarInsnNode FSTORE(int var) {
+	protected final VarInsnNode FSTORE(int var) {
 		return new VarInsnNode(FSTORE, var);
 	}
 
@@ -736,7 +748,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If the index is greater than 255, ASM will automatically wrap this insn in a WIDE insn
 	 * to allow further local variables.
 	 */
-	protected VarInsnNode DSTORE(int var) {
+	protected final VarInsnNode DSTORE(int var) {
 		return new VarInsnNode(DSTORE, var);
 	}
 
@@ -754,7 +766,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If the index is greater than 255, ASM will automatically wrap this insn in a WIDE insn
 	 * to allow further local variables.
 	 */
-	protected VarInsnNode ASTORE(int var) {
+	protected final VarInsnNode ASTORE(int var) {
 		return new VarInsnNode(ASTORE, var);
 	}
 
@@ -769,7 +781,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws ArrayIndexOutOfBoundsException if index is not within the bounds of the array
 	 * 		referenced by arrayref
 	 */
-	protected InsnNode IASTORE() {
+	protected final InsnNode IASTORE() {
 		return new InsnNode(IASTORE);
 	}
 
@@ -784,7 +796,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws ArrayIndexOutOfBoundsException if index is not within the bounds of the array
 	 * 		referenced by arrayref
 	 */
-	protected InsnNode LASTORE() {
+	protected final InsnNode LASTORE() {
 		return new InsnNode(LASTORE);
 	}
 
@@ -799,7 +811,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws ArrayIndexOutOfBoundsException if index is not within the bounds of the array
 	 * 		referenced by arrayref
 	 */
-	protected InsnNode FASTORE() {
+	protected final InsnNode FASTORE() {
 		return new InsnNode(FASTORE);
 	}
 
@@ -814,7 +826,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws ArrayIndexOutOfBoundsException if index is not within the bounds of the array
 	 * 		referenced by arrayref
 	 */
-	protected InsnNode DASTORE() {
+	protected final InsnNode DASTORE() {
 		return new InsnNode(DASTORE);
 	}
 
@@ -860,7 +872,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws ArrayStoreException if arrayref is not null and the actual type of the non-null value
 	 * 		is not assignment compatible with the actual type of the components of the array
 	 */
-	protected InsnNode AASTORE() {
+	protected final InsnNode AASTORE() {
 		return new InsnNode(AASTORE);
 	}
 
@@ -887,7 +899,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws ArrayIndexOutOfBoundsException if index is not within the bounds of the array
 	 * 		referenced by arrayref
 	 */
-	protected InsnNode BASTORE() {
+	protected final InsnNode BASTORE() {
 		return new InsnNode(BASTORE);
 	}
 
@@ -902,7 +914,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws ArrayIndexOutOfBoundsException if index is not within the bounds of the array
 	 * 		referenced by arrayref
 	 */
-	protected InsnNode CASTORE() {
+	protected final InsnNode CASTORE() {
 		return new InsnNode(CASTORE);
 	}
 
@@ -917,7 +929,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws ArrayIndexOutOfBoundsException if index is not within the bounds of the array
 	 * 		referenced by arrayref
 	 */
-	protected InsnNode SASTORE() {
+	protected final InsnNode SASTORE() {
 		return new InsnNode(SASTORE);
 	}
 
@@ -929,7 +941,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The pop instruction must not be used unless value is a value of a category 1 computational
 	 * type. (i.e. it is not a long or double)
 	 */
-	protected InsnNode POP() {
+	protected final InsnNode POP() {
 		return new InsnNode(POP);
 	}
 
@@ -939,7 +951,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * Pop the top one or two values from the operand stack, depending on if it is a category 1 or
 	 * 2 computational type.
 	 */
-	protected InsnNode POP2() {
+	protected final InsnNode POP2() {
 		return new InsnNode(POP2);
 	}
 
@@ -952,7 +964,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The dup instruction must not be used unless value is a value of a category 1 computational
 	 * type. (i.e. it is not a long or double)
 	 */
-	protected InsnNode DUP() {
+	protected final InsnNode DUP() {
 		return new InsnNode(DUP);
 	}
 
@@ -965,7 +977,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The dup_x1 instruction must not be used unless value and the previous value on the stack are
 	 * of a category 1 computational type. (i.e. they are not a component of a long or double)
 	 */
-	protected InsnNode DUP_X1() {
+	protected final InsnNode DUP_X1() {
 		return new InsnNode(DUP_X1);
 	}
 
@@ -976,7 +988,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * values down in the operand stack, depending on if the current and previous value are of a
 	 * category 1 or 2 computational type.
 	 */
-	protected InsnNode DUP_X2() {
+	protected final InsnNode DUP_X2() {
 		return new InsnNode(DUP_X2);
 	}
 
@@ -987,7 +999,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * values, depending on if it is a category 1 or 2 computational type, back onto the operand
 	 * stack in the original order.
 	 */
-	protected InsnNode DUP2() {
+	protected final InsnNode DUP2() {
 		return new InsnNode(DUP2);
 	}
 
@@ -997,7 +1009,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * Duplicate the top one or two values on the operand stack and insert the duplicated values, in
 	 * the original order, one value beneath the original value or values in the operand stack.
 	 */
-	protected InsnNode DUP2_X1() {
+	protected final InsnNode DUP2_X1() {
 		return new InsnNode(DUP2_X1);
 	}
 
@@ -1007,7 +1019,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * Duplicate the top one or two values on the operand stack and insert the duplicated values, in
 	 * the original order, into the operand stack.
 	 */
-	protected InsnNode DUP2_X2() {
+	protected final InsnNode DUP2_X2() {
 		return new InsnNode(DUP2_X2);
 	}
 
@@ -1019,7 +1031,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The swap instruction must not be used unless value1 and value2 are both values of a category
 	 * 1 computational type. (i.e. they are not a component of a long or double)
 	 */
-	protected InsnNode SWAP() {
+	protected final InsnNode SWAP() {
 		return new InsnNode(SWAP);
 	}
 
@@ -1036,7 +1048,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * Despite the fact that overflow may occur, execution of an iadd instruction never throws a
 	 * run-time exception.
 	 */
-	protected InsnNode IADD() {
+	protected final InsnNode IADD() {
 		return new InsnNode(IADD);
 	}
 
@@ -1053,7 +1065,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * Despite the fact that overflow may occur, execution of an ladd instruction never throws a
 	 * run-time exception.
 	 */
-	protected InsnNode LADD() {
+	protected final InsnNode LADD() {
 		return new InsnNode(LADD);
 	}
 
@@ -1087,7 +1099,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * Despite the fact that overflow, underflow, or loss of precision may occur, execution of an
 	 * fadd instruction never throws a run-time exception.
 	 */
-	protected InsnNode FADD() {
+	protected final InsnNode FADD() {
 		return new InsnNode(FADD);
 	}
 
@@ -1120,7 +1132,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * Despite the fact that overflow, underflow, or loss of precision may occur, execution of a
 	 * dadd instruction never throws a run-time exception.
 	 */
-	protected InsnNode DADD() {
+	protected final InsnNode DADD() {
 		return new InsnNode(DADD);
 	}
 
@@ -1141,7 +1153,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * Despite the fact that overflow may occur, execution of an isub instruction never throws a
 	 * run-time exception.
 	 */
-	protected InsnNode ISUB() {
+	protected final InsnNode ISUB() {
 		return new InsnNode(ISUB);
 	}
 
@@ -1162,7 +1174,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * Despite the fact that overflow may occur, execution of an lsub instruction never throws a
 	 * run-time exception.
 	 */
-	protected InsnNode LSUB() {
+	protected final InsnNode LSUB() {
 		return new InsnNode(LSUB);
 	}
 
@@ -1181,7 +1193,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * Despite the fact that overflow, underflow, or loss of precision may occur, execution of an
 	 * fsub instruction never throws a run-time exception.
 	 */
-	protected InsnNode FSUB() {
+	protected final InsnNode FSUB() {
 		return new InsnNode(FSUB);
 	}
 
@@ -1200,7 +1212,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * Despite the fact that overflow, underflow, or loss of precision may occur, execution of a
 	 * dsub instruction never throws a run-time exception.
 	 */
-	protected InsnNode DSUB() {
+	protected final InsnNode DSUB() {
 		return new InsnNode(DSUB);
 	}
 
@@ -1218,7 +1230,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * Despite the fact that overflow may occur, execution of an imul instruction never throws a
 	 * run-time exception.
 	 */
-	protected InsnNode IMUL() {
+	protected final InsnNode IMUL() {
 		return new InsnNode(IMUL);
 	}
 
@@ -1236,7 +1248,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * Despite the fact that overflow may occur, execution of an lmul instruction never throws a
 	 * run-time exception.
 	 */
-	protected InsnNode LMUL() {
+	protected final InsnNode LMUL() {
 		return new InsnNode(LMUL);
 	}
 
@@ -1266,7 +1278,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * Despite the fact that overflow, underflow, or loss of precision may occur, execution of an
 	 * fmul instruction never throws a run-time exception.
 	 */
-	protected InsnNode FMUL() {
+	protected final InsnNode FMUL() {
 		return new InsnNode(FMUL);
 	}
 
@@ -1296,7 +1308,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * Despite the fact that overflow, underflow, or loss of precision may occur, execution of a
 	 * dmul instruction never throws a run-time exception.
 	 */
-	protected InsnNode DMUL() {
+	protected final InsnNode DMUL() {
 		return new InsnNode(DMUL);
 	}
 
@@ -1318,7 +1330,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * in this case.
 	 * @throws ArithmeticException if the value of the divisor is 0
 	 */
-	protected InsnNode IDIV() {
+	protected final InsnNode IDIV() {
 		return new InsnNode(IDIV);
 	}
 
@@ -1340,7 +1352,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * in this case.
 	 * @throws ArithmeticException if the value of the divisor is 0
 	 */
-	protected InsnNode LDIV() {
+	protected final InsnNode LDIV() {
 		return new InsnNode(LDIV);
 	}
 
@@ -1375,7 +1387,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * Despite the fact that overflow, underflow, division by zero, or loss of precision may occur,
 	 * execution of an fdiv instruction never throws a run-time exception.
 	 */
-	protected InsnNode FDIV() {
+	protected final InsnNode FDIV() {
 		return new InsnNode(FDIV);
 	}
 
@@ -1410,7 +1422,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * Despite the fact that overflow, underflow, division by zero, or loss of precision may occur,
 	 * execution of a ddiv instruction never throws a run-time exception.
 	 */
-	protected InsnNode DDIV() {
+	protected final InsnNode DDIV() {
 		return new InsnNode(DDIV);
 	}
 
@@ -1429,7 +1441,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * is always less than the magnitude of the divisor.
 	 * @throws ArithmeticException if the value of the divisor is 0
 	 */
-	protected InsnNode IREM() {
+	protected final InsnNode IREM() {
 		return new InsnNode(IREM);
 	}
 
@@ -1448,7 +1460,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * is always less than the magnitude of the divisor.
 	 * @throws ArithmeticException if the value of the divisor is 0
 	 */
-	protected InsnNode LREM() {
+	protected final InsnNode LREM() {
 		return new InsnNode(LREM);
 	}
 
@@ -1486,7 +1498,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * The IEEE 754 remainder operation may be computed by the library routine Math.IEEEremainder.
 	 */
-	protected InsnNode FREM() {
+	protected final InsnNode FREM() {
 		return new InsnNode(FREM);
 	}
 
@@ -1524,7 +1536,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * The IEEE 754 remainder operation may be computed by the library routine Math.IEEEremainder.
 	 */
-	protected InsnNode DREM() {
+	protected final InsnNode DREM() {
 		return new InsnNode(DREM);
 	}
 
@@ -1541,7 +1553,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * For all int values x, -x equals (~x)+1.
 	 */
-	protected InsnNode INEG() {
+	protected final InsnNode INEG() {
 		return new InsnNode(INEG);
 	}
 
@@ -1558,7 +1570,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * For all long values x, -x equals (~x)+1.
 	 */
-	protected InsnNode LNEG() {
+	protected final InsnNode LNEG() {
 		return new InsnNode(LNEG);
 	}
 
@@ -1579,7 +1591,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <li>If the operand is a zero, the result is the zero of opposite sign.
 	 * </ul>
 	 */
-	protected InsnNode FNEG() {
+	protected final InsnNode FNEG() {
 		return new InsnNode(FNEG);
 	}
 
@@ -1600,7 +1612,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <li>If the operand is a zero, the result is the zero of opposite sign.
 	 * </ul>
 	 */
-	protected InsnNode DNEG() {
+	protected final InsnNode DNEG() {
 		return new InsnNode(DNEG);
 	}
 
@@ -1615,7 +1627,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * distance actually used is always in the range 0 to 31, inclusive, as if value2 were subjected
 	 * to a bitwise logical AND with the mask value 0x1f.
 	 */
-	protected InsnNode ISHL() {
+	protected final InsnNode ISHL() {
 		return new InsnNode(ISHL);
 	}
 
@@ -1630,7 +1642,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * distance actually used is therefore always in the range 0 to 63, inclusive, as if value2 were
 	 * subjected to a bitwise logical AND with the mask value 0x3f.
 	 */
-	protected InsnNode LSHL() {
+	protected final InsnNode LSHL() {
 		return new InsnNode(LSHL);
 	}
 
@@ -1647,7 +1659,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * actually used is always in the range 0 to 31, inclusive, as if value2 were subjected to a
 	 * bitwise logical AND with the mask value 0x1f.
 	 */
-	protected InsnNode ISHR() {
+	protected final InsnNode ISHR() {
 		return new InsnNode(ISHR);
 	}
 
@@ -1664,7 +1676,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * actually used is therefore always in the range 0 to 63, inclusive, as if value2 were
 	 * subjected to a bitwise logical AND with the mask value 0x3f.
 	 */
-	protected InsnNode LSHR() {
+	protected final InsnNode LSHR() {
 		return new InsnNode(LSHR);
 	}
 
@@ -1681,7 +1693,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * << ~s). The addition of the (2 << ~s) term cancels out the propagated sign bit. The shift
 	 * distance actually used is always in the range 0 to 31, inclusive.
 	 */
-	protected InsnNode IUSHR() {
+	protected final InsnNode IUSHR() {
 		return new InsnNode(IUSHR);
 	}
 
@@ -1698,7 +1710,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * << ~s). The addition of the (2L << ~s) term cancels out the propagated sign bit. The shift
 	 * distance actually used is always in the range 0 to 63, inclusive.
 	 */
-	protected InsnNode LUSHR() {
+	protected final InsnNode LUSHR() {
 		return new InsnNode(LUSHR);
 	}
 
@@ -1709,7 +1721,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * result is calculated by taking the bitwise AND (conjunction) of value1 and value2. The result
 	 * is pushed onto the operand stack.
 	 */
-	protected InsnNode IAND() {
+	protected final InsnNode IAND() {
 		return new InsnNode(IAND);
 	}
 
@@ -1720,7 +1732,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * result is calculated by taking the bitwise AND (conjunction) of value1 and value2. The result
 	 * is pushed onto the operand stack.
 	 */
-	protected InsnNode LAND() {
+	protected final InsnNode LAND() {
 		return new InsnNode(LAND);
 	}
 
@@ -1731,7 +1743,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * result is calculated by taking the bitwise OR of value1 and value2. The result is pushed onto
 	 * the operand stack.
 	 */
-	protected InsnNode IOR() {
+	protected final InsnNode IOR() {
 		return new InsnNode(IOR);
 	}
 	
@@ -1742,7 +1754,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * result is calculated by taking the bitwise OR of value1 and value2. The result is pushed onto
 	 * the operand stack.
 	 */
-	protected InsnNode LOR() {
+	protected final InsnNode LOR() {
 		return new InsnNode(LOR);
 	}
 
@@ -1753,7 +1765,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * result is calculated by taking the bitwise XOR of value1 and value2. The result is pushed
 	 * onto the operand stack.
 	 */
-	protected InsnNode IXOR() {
+	protected final InsnNode IXOR() {
 		return new InsnNode(IXOR);
 	}
 	/**
@@ -1763,7 +1775,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * result is calculated by taking the bitwise XOR of value1 and value2. The result is pushed
 	 * onto the operand stack.
 	 */
-	protected InsnNode LXOR() {
+	protected final InsnNode LXOR() {
 		return new InsnNode(LXOR);
 	}
 
@@ -1778,7 +1790,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If the index is greater than 255, ASM will automatically wrap this insn in a WIDE insn to
 	 * allow further local variables.
 	 */
-	protected IincInsnNode IINC(int var, int incr) {
+	protected final IincInsnNode IINC(int var, int incr) {
 		return new IincInsnNode(var, incr);
 	}
 
@@ -1791,7 +1803,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The i2l instruction performs a widening primitive conversion (JLS §5.1.2). Because all values
 	 * of type int are exactly representable by type long, the conversion is exact.
 	 */
-	protected InsnNode I2L() {
+	protected final InsnNode I2L() {
 		return new InsnNode(I2L);
 	}
 
@@ -1805,7 +1817,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The i2f instruction performs a widening primitive conversion (JLS §5.1.2), but may result in
 	 * a loss of precision because values of type float have only 24 significand bits.
 	 */
-	protected InsnNode I2F() {
+	protected final InsnNode I2F() {
 		return new InsnNode(I2F);
 	}
 
@@ -1818,7 +1830,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The i2d instruction performs a widening primitive conversion (JLS §5.1.2). Because all values
 	 * of type int are exactly representable by type double, the conversion is exact.
 	 */
-	protected InsnNode I2D() {
+	protected final InsnNode I2D() {
 		return new InsnNode(I2D);
 	}
 
@@ -1833,7 +1845,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * information about the overall magnitude of value. The result may also not have the same sign
 	 * as value.
 	 */
-	protected InsnNode L2I() {
+	protected final InsnNode L2I() {
 		return new InsnNode(L2I);
 	}
 
@@ -1847,7 +1859,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The l2f instruction performs a widening primitive conversion (JLS §5.1.2) that may lose
 	 * precision because values of type float have only 24 significand bits.
 	 */
-	protected InsnNode L2F() {
+	protected final InsnNode L2F() {
 		return new InsnNode(L2F);
 	}
 
@@ -1861,7 +1873,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The l2d instruction performs a widening primitive conversion (JLS §5.1.2) that may lose
 	 * precision because values of type double have only 53 significand bits.
 	 */
-	protected InsnNode L2D() {
+	protected final InsnNode L2D() {
 		return new InsnNode(L2D);
 	}
 
@@ -1884,7 +1896,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The f2i instruction performs a narrowing primitive conversion (JLS §5.1.3). It may lose
 	 * information about the overall magnitude of value' and may also lose precision.
 	 */
-	protected InsnNode F2I() {
+	protected final InsnNode F2I() {
 		return new InsnNode(F2I);
 	}
 
@@ -1907,7 +1919,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The f2l instruction performs a narrowing primitive conversion (JLS §5.1.3). It may lose
 	 * information about the overall magnitude of value' and may also lose precision.
 	 */
-	protected InsnNode F2L() {
+	protected final InsnNode F2L() {
 		return new InsnNode(F2L);
 	}
 
@@ -1928,7 +1940,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * float-extended-exponent value set and the target result is constrained to the double value
 	 * set, rounding of value may be required.
 	 */
-	protected InsnNode F2D() {
+	protected final InsnNode F2D() {
 		return new InsnNode(F2D);
 	}
 
@@ -1951,7 +1963,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The d2i instruction performs a narrowing primitive conversion (JLS §5.1.3). It may lose
 	 * information about the overall magnitude of value' and may also lose precision.
 	 */
-	protected InsnNode D2I() {
+	protected final InsnNode D2I() {
 		return new InsnNode(D2I);
 	}
 
@@ -1974,7 +1986,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The d2l instruction performs a narrowing primitive conversion (JLS §5.1.3). It may lose
 	 * information about the overall magnitude of value' and may also lose precision.
 	 */
-	protected InsnNode D2L() {
+	protected final InsnNode D2L() {
 		return new InsnNode(D2L);
 	}
 
@@ -2000,7 +2012,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The d2f instruction performs a narrowing primitive conversion (JLS §5.1.3). It may lose
 	 * information about the overall magnitude of value' and may also lose precision.
 	 */
-	protected InsnNode D2F() {
+	protected final InsnNode D2F() {
 		return new InsnNode(D2F);
 	}
 
@@ -2015,7 +2027,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * information about the overall magnitude of value. The result may also not have the same sign
 	 * as value.
 	 */
-	protected InsnNode I2B() {
+	protected final InsnNode I2B() {
 		return new InsnNode(I2B);
 	}
 
@@ -2030,7 +2042,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * information about the overall magnitude of value. The result (which is always positive) may
 	 * also not have the same sign as value.
 	 */
-	protected InsnNode I2C() {
+	protected final InsnNode I2C() {
 		return new InsnNode(I2C);
 	}
 
@@ -2045,7 +2057,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * information about the overall magnitude of value. The result may also not have the same sign
 	 * as value.
 	 */
-	protected InsnNode I2S() {
+	protected final InsnNode I2S() {
 		return new InsnNode(I2S);
 	}
 
@@ -2058,7 +2070,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * onto the operand stack. If value1 is less than value2, the int value -1 is pushed onto the
 	 * operand stack.
 	 */
-	protected InsnNode LCMP() {
+	protected final InsnNode LCMP() {
 		return new InsnNode(LCMP);
 	}
 
@@ -2086,7 +2098,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * same result onto the operand stack whether the comparison fails on non-NaN values or fails
 	 * because it encountered a NaN.
 	 */
-	protected InsnNode FCMPL() {
+	protected final InsnNode FCMPL() {
 		return new InsnNode(FCMPL);
 	}
 
@@ -2114,7 +2126,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * same result onto the operand stack whether the comparison fails on non-NaN values or fails
 	 * because it encountered a NaN.
 	 */
-	protected InsnNode FCMPG() {
+	protected final InsnNode FCMPG() {
 		return new InsnNode(FCMPG);
 	}
 
@@ -2142,7 +2154,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * same result onto the operand stack whether the comparison fails on non-NaN values or fails
 	 * because it encountered a NaN.
 	 */
-	protected InsnNode DCMPL() {
+	protected final InsnNode DCMPL() {
 		return new InsnNode(DCMPL);
 	}
 	/**
@@ -2169,7 +2181,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * same result onto the operand stack whether the comparison fails on non-NaN values or fails
 	 * because it encountered a NaN.
 	 */
-	protected InsnNode DCMPG() {
+	protected final InsnNode DCMPG() {
 		return new InsnNode(DCMPG);
 	}
 
@@ -2182,7 +2194,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If comparison succeeds, execution proceeds at the location of the given label. Otherwise,
 	 * execution proceeds following this instruction.
 	 */
-	protected JumpInsnNode IFEQ(LabelNode label) {
+	protected final JumpInsnNode IFEQ(LabelNode label) {
 		return new JumpInsnNode(IFEQ, label);
 	}
 
@@ -2195,7 +2207,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If comparison succeeds, execution proceeds at the location of the given label. Otherwise,
 	 * execution proceeds following this instruction.
 	 */
-	protected JumpInsnNode IFNE(LabelNode label) {
+	protected final JumpInsnNode IFNE(LabelNode label) {
 		return new JumpInsnNode(IFNE, label);
 	}
 
@@ -2208,7 +2220,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If comparison succeeds, execution proceeds at the location of the given label. Otherwise,
 	 * execution proceeds following this instruction.
 	 */
-	protected JumpInsnNode IFLT(LabelNode label) {
+	protected final JumpInsnNode IFLT(LabelNode label) {
 		return new JumpInsnNode(IFLT, label);
 	}
 
@@ -2221,7 +2233,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If comparison succeeds, execution proceeds at the location of the given label. Otherwise,
 	 * execution proceeds following this instruction.
 	 */
-	protected JumpInsnNode IFGE(LabelNode label) {
+	protected final JumpInsnNode IFGE(LabelNode label) {
 		return new JumpInsnNode(IFGE, label);
 	}
 
@@ -2234,7 +2246,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If comparison succeeds, execution proceeds at the location of the given label. Otherwise,
 	 * execution proceeds following this instruction.
 	 */
-	protected JumpInsnNode IFGT(LabelNode label) {
+	protected final JumpInsnNode IFGT(LabelNode label) {
 		return new JumpInsnNode(IFGT, label);
 	}
 
@@ -2247,7 +2259,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If comparison succeeds, execution proceeds at the location of the given label. Otherwise,
 	 * execution proceeds following this instruction.
 	 */
-	protected JumpInsnNode IFLE(LabelNode label) {
+	protected final JumpInsnNode IFLE(LabelNode label) {
 		return new JumpInsnNode(IFLE, label);
 	}
 
@@ -2260,7 +2272,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If comparison succeeds, execution proceeds at the location of the given label. Otherwise,
 	 * execution proceeds following this instruction.
 	 */
-	protected JumpInsnNode IF_ICMPEQ(LabelNode label) {
+	protected final JumpInsnNode IF_ICMPEQ(LabelNode label) {
 		return new JumpInsnNode(IF_ICMPEQ, label);
 	}
 
@@ -2273,7 +2285,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If comparison succeeds, execution proceeds at the location of the given label. Otherwise,
 	 * execution proceeds following this instruction.
 	 */
-	protected JumpInsnNode IF_ICMPNE(LabelNode label) {
+	protected final JumpInsnNode IF_ICMPNE(LabelNode label) {
 		return new JumpInsnNode(IF_ICMPNE, label);
 	}
 
@@ -2286,7 +2298,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If comparison succeeds, execution proceeds at the location of the given label. Otherwise,
 	 * execution proceeds following this instruction.
 	 */
-	protected JumpInsnNode IF_ICMPLT(LabelNode label) {
+	protected final JumpInsnNode IF_ICMPLT(LabelNode label) {
 		return new JumpInsnNode(IF_ICMPLT, label);
 	}
 
@@ -2299,7 +2311,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If comparison succeeds, execution proceeds at the location of the given label. Otherwise,
 	 * execution proceeds following this instruction.
 	 */
-	protected JumpInsnNode IF_ICMPGE(LabelNode label) {
+	protected final JumpInsnNode IF_ICMPGE(LabelNode label) {
 		return new JumpInsnNode(IF_ICMPGE, label);
 	}
 
@@ -2312,7 +2324,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If comparison succeeds, execution proceeds at the location of the given label. Otherwise,
 	 * execution proceeds following this instruction.
 	 */
-	protected JumpInsnNode IF_ICMPGT(LabelNode label) {
+	protected final JumpInsnNode IF_ICMPGT(LabelNode label) {
 		return new JumpInsnNode(IF_ICMPGT, label);
 	}
 
@@ -2325,7 +2337,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If comparison succeeds, execution proceeds at the location of the given label. Otherwise,
 	 * execution proceeds following this instruction.
 	 */
-	protected JumpInsnNode IF_ICMPLE(LabelNode label) {
+	protected final JumpInsnNode IF_ICMPLE(LabelNode label) {
 		return new JumpInsnNode(IF_ICMPLE, label);
 	}
 
@@ -2338,7 +2350,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If comparison succeeds, execution proceeds at the location of the given label. Otherwise,
 	 * execution proceeds following this instruction.
 	 */
-	protected JumpInsnNode IF_ACMPEQ(LabelNode label) {
+	protected final JumpInsnNode IF_ACMPEQ(LabelNode label) {
 		return new JumpInsnNode(IF_ACMPEQ, label);
 	}
 
@@ -2351,7 +2363,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * If comparison succeeds, execution proceeds at the location of the given label. Otherwise,
 	 * execution proceeds following this instruction.
 	 */
-	protected JumpInsnNode IF_ACMPNE(LabelNode label) {
+	protected final JumpInsnNode IF_ACMPNE(LabelNode label) {
 		return new JumpInsnNode(IF_ACMPNE, label);
 	}
 
@@ -2360,7 +2372,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * <p>
 	 * Execution proceeds at the location of the given label.
 	 */
-	protected JumpInsnNode GOTO(LabelNode label) {
+	protected final JumpInsnNode GOTO(LabelNode label) {
 		return new JumpInsnNode(GOTO, label);
 	}
 
@@ -2380,7 +2392,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @deprecated If encountered in a modern classfile, a VerifyError will be thrown.
 	 */
 	@Deprecated
-	protected JumpInsnNode JSR(LabelNode label) {
+	protected final JumpInsnNode JSR(LabelNode label) {
 		return new JumpInsnNode(JSR, label);
 	}
 
@@ -2408,7 +2420,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * 		stack.
 	 */
 	@Deprecated
-	protected VarInsnNode RET(int i) {
+	protected final VarInsnNode RET(int i) {
 		return new VarInsnNode(RET, i);
 	}
 
@@ -2420,7 +2432,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * position index - low of the given jump table is extracted. Execution then proceeds at the
 	 * given label.
 	 */
-	protected TableSwitchInsnNode TABLESWITCH(int min, int max, LabelNode dflt, LabelNode... labels) {
+	protected final TableSwitchInsnNode TABLESWITCH(int min, int max, LabelNode dflt, LabelNode... labels) {
 		return new TableSwitchInsnNode(min, max, dflt, labels);
 	}
 
@@ -2438,7 +2450,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The match-offset pairs are sorted to support lookup routines that are quicker than linear
 	 * search.
 	 */
-	protected LookupSwitchInsnNode LOOKUPSWITCH(LabelNode dflt, int[] keys, LabelNode[] labels) {
+	protected final LookupSwitchInsnNode LOOKUPSWITCH(LabelNode dflt, int[] keys, LabelNode[] labels) {
 		return new LookupSwitchInsnNode(dflt, keys, labels);
 	}
 
@@ -2470,7 +2482,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * 		Machine implementation enforces the rules on structured locking and the first of those
 	 * 		rules is violated during invocation of the current method.
 	 */
-	protected InsnNode IRETURN() {
+	protected final InsnNode IRETURN() {
 		return new InsnNode(IRETURN);
 	}
 
@@ -2495,7 +2507,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * 		Machine implementation enforces the rules on structured locking and the first of those
 	 * 		rules is violated during invocation of the current method.
 	 */
-	protected InsnNode LRETURN() {
+	protected final InsnNode LRETURN() {
 		return new InsnNode(LRETURN);
 	}
 
@@ -2520,7 +2532,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * 		Machine implementation enforces the rules on structured locking and the first of those
 	 * 		rules is violated during invocation of the current method.
 	 */
-	protected InsnNode FRETURN() {
+	protected final InsnNode FRETURN() {
 		return new InsnNode(FRETURN);
 	}
 
@@ -2545,7 +2557,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * 		Machine implementation enforces the rules on structured locking and the first of those
 	 * 		rules is violated during invocation of the current method.
 	 */
-	protected InsnNode DRETURN() {
+	protected final InsnNode DRETURN() {
 		return new InsnNode(DRETURN);
 	}
 
@@ -2572,7 +2584,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * 		Machine implementation enforces the rules on structured locking and the first of those
 	 * 		rules is violated during invocation of the current method.
 	 */
-	protected InsnNode ARETURN() {
+	protected final InsnNode ARETURN() {
 		return new InsnNode(ARETURN);
 	}
 
@@ -2595,7 +2607,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * 		Machine implementation enforces the rules on structured locking and the first of those
 	 * 		rules is violated during invocation of the current method.
 	 */
-	protected InsnNode RETURN() {
+	protected final InsnNode RETURN() {
 		return new InsnNode(RETURN);
 	}
 
@@ -2617,7 +2629,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws IncompatibleClassChangeError if the resolved field is not a static (class) field or
 	 * 		an interface field
 	 */
-	protected FieldInsnNode GETSTATIC(String owner, String name, String desc) {
+	protected final FieldInsnNode GETSTATIC(String owner, String name, String desc) {
 		return new FieldInsnNode(GETSTATIC, remapType(owner), remapField(owner, name, desc), remapFieldDesc(desc));
 	}
 
@@ -2657,7 +2669,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * 		current class or interface and the instruction does not occur in the class or interface
 	 *		initialization method of the current class or interface
 	 */
-	protected FieldInsnNode PUTSTATIC(String owner, String name, String desc) {
+	protected final FieldInsnNode PUTSTATIC(String owner, String name, String desc) {
 		return new FieldInsnNode(PUTSTATIC, remapType(owner), remapField(owner, name, desc), remapFieldDesc(desc));
 	}
 
@@ -2681,7 +2693,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * {@link #ARRAYLENGTH} instruction is used instead.
 	 * @throws NullPointerException if objectref is null
 	 */
-	protected FieldInsnNode GETFIELD(String owner, String name, String desc) {
+	protected final FieldInsnNode GETFIELD(String owner, String name, String desc) {
 		return new FieldInsnNode(GETFIELD, remapType(owner), remapField(owner, name, desc), remapFieldDesc(desc));
 	}
 
@@ -2721,7 +2733,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * 		current class and the instruction does not occur inan instance initialization method of
 	 * 		the current class
 	 */
-	protected FieldInsnNode PUTFIELD(String owner, String name, String desc) {
+	protected final FieldInsnNode PUTFIELD(String owner, String name, String desc) {
 		return new FieldInsnNode(PUTFIELD, remapType(owner), remapField(owner, name, desc), remapFieldDesc(desc));
 	}
 
@@ -2800,7 +2812,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws UnsatisfiedLinkError if the selected method is native and the code that implements
 	 * 		the method cannot be bound
 	 */
-	protected MethodInsnNode INVOKEVIRTUAL(String owner, String name, String desc) {
+	protected final MethodInsnNode INVOKEVIRTUAL(String owner, String name, String desc) {
 		return new MethodInsnNode(INVOKEVIRTUAL, remapType(owner), remapMethod(owner, name, desc), remapMethodDesc(desc));
 	}
 
@@ -2903,7 +2915,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * 		superinterface methods of C that match the resolved method's name and descriptor and are
 	 * 		not abstract
 	 */
-	protected MethodInsnNode INVOKESPECIAL(String owner, String name, String desc) {
+	protected final MethodInsnNode INVOKESPECIAL(String owner, String name, String desc) {
 		return new MethodInsnNode(INVOKESPECIAL, remapType(owner), remapMethod(owner, name, desc), remapMethodDesc(desc));
 	}
 
@@ -2966,7 +2978,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws UnsatisfiedLinkError if the resolved method is native and the code that implements
 	 * 		the method cannot be bound
 	 */
-	protected MethodInsnNode INVOKESTATIC(String owner, String name, String desc) {
+	protected final MethodInsnNode INVOKESTATIC(String owner, String name, String desc) {
 		return new MethodInsnNode(INVOKESTATIC, remapType(owner), remapMethod(owner, name, desc), remapMethodDesc(desc));
 	}
 
@@ -3042,7 +3054,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * 		method's name and descriptor and are not abstract
 	 * @throws UnsatisfiedLinkError if the selected method is native and the code that implements the method cannot be bound
 	 */
-	protected MethodInsnNode INVOKEINTERFACE(String owner, String name, String desc) {
+	protected final MethodInsnNode INVOKEINTERFACE(String owner, String name, String desc) {
 		return new MethodInsnNode(INVOKEINTERFACE, remapType(owner), remapMethod(owner, name, desc), remapMethodDesc(desc));
 	}
 
@@ -3091,7 +3103,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * instance of java.lang.invoke.CallSite never throws a NullPointerException or a
 	 * java.lang.invoke.WrongMethodTypeException.
 	 */
-	protected InvokeDynamicInsnNode INVOKEDYNAMIC(String name, String desc, Handle bootstrapMethodHandle, Object... bootstrapMethodArguments) {
+	protected final InvokeDynamicInsnNode INVOKEDYNAMIC(String name, String desc, Handle bootstrapMethodHandle, Object... bootstrapMethodArguments) {
 		return new InvokeDynamicInsnNode(name, remapMethodDesc(desc), bootstrapMethodHandle, bootstrapMethodArguments);
 	}
 
@@ -3120,7 +3132,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws InstantiationError if the symbolic reference to the class or interface type resolved
 	 * 		to an interface or an abstract class
 	 */
-	protected TypeInsnNode NEW(String type) {
+	protected final TypeInsnNode NEW(String type) {
 		return new TypeInsnNode(NEW, remapType(type));
 	}
 	
@@ -3147,7 +3159,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * to access those arrays.
 	 * @throws NegativeArraySizeException if count is less than zero
 	 */
-	protected IntInsnNode NEWARRAY(ArrayType atype) {
+	protected final IntInsnNode NEWARRAY(ArrayType atype) {
 		return new IntInsnNode(NEWARRAY, atype.value);
 	}
 	
@@ -3156,7 +3168,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @see #NEWARRAY(ArrayType)
 	 */
 	@Deprecated
-	protected IntInsnNode NEWARRAY(int atype) {
+	protected final IntInsnNode NEWARRAY(int atype) {
 		return new IntInsnNode(NEWARRAY, atype);
 	}
 
@@ -3180,7 +3192,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * 
 	 * @throws NegativeArraySizeException if count is less than zero
 	 */
-	protected TypeInsnNode ANEWARRAY(String type) {
+	protected final TypeInsnNode ANEWARRAY(String type) {
 		return new TypeInsnNode(ANEWARRAY, remapType(type));
 	}
 
@@ -3193,7 +3205,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * 
 	 * @throws NullPointerException if arrayref is null
 	 */
-	protected InsnNode ARRAYLENGTH() {
+	protected final InsnNode ARRAYLENGTH() {
 		return new InsnNode(ARRAYLENGTH);
 	}
 
@@ -3239,7 +3251,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * intervening frames from the method that threw the exception up to, but not including, the
 	 * method that handles the exception are discarded.
 	 */
-	protected InsnNode ATHROW() {
+	protected final InsnNode ATHROW() {
 		return new InsnNode(ATHROW);
 	}
 
@@ -3293,7 +3305,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws ClassCastException  if objectref cannot be cast to the resolved class, array, or
 	 * 		interface type
 	 */
-	protected TypeInsnNode CHECKCAST(String desc) {
+	protected final TypeInsnNode CHECKCAST(String desc) {
 		return new TypeInsnNode(CHECKCAST, remapType(desc));
 	}
 
@@ -3346,7 +3358,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * in its treatment of null, its behavior when its test fails (checkcast throws an exception,
 	 * instanceof pushes a result code), and its effect on the operand stack.
 	 */
-	protected TypeInsnNode INSTANCEOF(String desc) {
+	protected final TypeInsnNode INSTANCEOF(String desc) {
 		return new TypeInsnNode(INSTANCEOF, remapType(desc));
 	}
 
@@ -3388,7 +3400,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * instruction set of the Java Virtual Machine.
 	 * @throws NullPointerException if objectref is null
 	 */
-	protected InsnNode MONITORENTER() {
+	protected final InsnNode MONITORENTER() {
 		return new InsnNode(MONITORENTER);
 	}
 
@@ -3426,7 +3438,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * 		Virtual Machine implementation enforces the rules on structured locking and if the
 	 * 		second of those rules is violated by the execution of this monitorexit instruction
 	 */
-	protected InsnNode MONITOREXIT() {
+	protected final InsnNode MONITOREXIT() {
 		return new InsnNode(MONITOREXIT);
 	}
 
@@ -3469,7 +3481,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * @throws NegativeArraySizeException if any of the dimensions values on the operand stack are
 	 * 		less than zero
 	 */
-	protected MultiANewArrayInsnNode MULTIANEWARRAY(String type, int dim) {
+	protected final MultiANewArrayInsnNode MULTIANEWARRAY(String type, int dim) {
 		return new MultiANewArrayInsnNode(remapType(type), dim);
 	}
 
@@ -3479,7 +3491,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The value must of type reference. It is popped from the operand stack. If value is null,
 	 * execution proceeds at the given label. Otherwise, execution proceeds following this instruction.
 	 */
-	protected JumpInsnNode IFNULL(LabelNode label) {
+	protected final JumpInsnNode IFNULL(LabelNode label) {
 		return new JumpInsnNode(IFNULL, label);
 	}
 
@@ -3489,7 +3501,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 * The value must of type reference. It is popped from the operand stack. If value is not null,
 	 * execution proceeds at the given label. Otherwise, execution proceeds following this instruction.
 	 */
-	protected JumpInsnNode IFNONNULL(LabelNode label) {
+	protected final JumpInsnNode IFNONNULL(LabelNode label) {
 		return new JumpInsnNode(IFNONNULL, label);
 	}
 
