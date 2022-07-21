@@ -29,6 +29,7 @@ package nilloader.api.lib.mini;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -36,21 +37,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import org.cadixdev.bombe.type.FieldType;
-import org.cadixdev.bombe.type.MethodDescriptor;
-import org.cadixdev.bombe.type.signature.FieldSignature;
 import org.cadixdev.bombe.type.signature.MethodSignature;
 import org.cadixdev.lorenz.MappingSet;
-import org.cadixdev.lorenz.model.ClassMapping;
-import org.cadixdev.lorenz.model.FieldMapping;
-import org.cadixdev.lorenz.model.MethodMapping;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.*;
 
-import nilloader.NilLoader;
+import nilloader.NilAgent;
 import nilloader.NilLoaderLog;
 import nilloader.api.ClassTransformer;
 import nilloader.api.lib.mini.annotation.Patch;
@@ -71,7 +66,7 @@ public abstract class MiniTransformer implements ClassTransformer {
 	private final Optional<MappingSet> mappings;
 	
 	public MiniTransformer() {
-		this.mappings = Optional.ofNullable(NilLoader.getActiveMappings(NilLoader.getActiveMod()));
+		this.mappings = Optional.ofNullable(NilAgent.getActiveMappings(NilAgent.getActiveMod()));
 		Patch.Class classAnn = getClass().getAnnotation(Patch.Class.class);
 		String className = classAnn.value().replace('.', '/');
 		classTargetName = remapType(className);
@@ -126,6 +121,10 @@ public abstract class MiniTransformer implements ClassTransformer {
 	 */
 	protected boolean modifyClassStructure(ClassNode clazz) {
 		return false;
+	}
+	
+	public Set<String> getTargets() {
+		return Collections.singleton(classTargetName);
 	}
 	
 	@Override
@@ -189,7 +188,6 @@ public abstract class MiniTransformer implements ClassTransformer {
 			}
 			msg.deleteCharAt(msg.length()-1);
 			String msgS = msg.toString();
-			$$internal$logError("[{}] {}", getClass().getName(), msgS);
 			throw new Error(msgS);
 		}
 		
@@ -215,38 +213,20 @@ public abstract class MiniTransformer implements ClassTransformer {
 		NilLoaderLog.log.error(fmt, params);
 	}
 
-	private String remapType(String type) {
-		return mappings.map(m -> m.computeClassMapping(type))
-				.orElse(Optional.empty())
-				.map(ClassMapping::getFullDeobfuscatedName)
-				.orElse(type);
+	protected String remapType(String type) {
+		return MiniUtils.remapType(mappings, type);
 	}
-	private String remapField(String owner, String name, String desc) {
-		return mappings.map(m -> m.computeClassMapping(owner))
-				.orElse(Optional.empty())
-				.map(cm -> cm.computeFieldMapping(FieldSignature.of(name, desc)))
-				.orElse(Optional.empty())
-				.map(FieldMapping::getDeobfuscatedName)
-				.orElse(name);
+	protected String remapField(String owner, String name, String desc) {
+		return MiniUtils.remapField(mappings, owner, name, desc);
 	}
-	private String remapMethod(String owner, String name, String desc) {
-		return mappings.map(m -> m.computeClassMapping(owner))
-			.orElse(Optional.empty())
-			.map(cm -> cm.getMethodMapping(name, desc))
-			.orElse(Optional.empty())
-			.map(MethodMapping::getDeobfuscatedSignature)
-			.map(MethodSignature::getName)
-			.orElse(name);
+	protected String remapMethod(String owner, String name, String desc) {
+		return MiniUtils.remapMethod(mappings, owner, name, desc);
 	}
-	private String remapMethodDesc(String desc) {
-		return mappings.map(m -> m.deobfuscate(MethodDescriptor.of(desc)))
-				.map(MethodDescriptor::toString)
-				.orElse(desc);
+	protected String remapMethodDesc(String desc) {
+		return MiniUtils.remapMethodDesc(mappings, desc);
 	}
-	private String remapFieldDesc(String desc) {
-		return mappings.map(m -> m.deobfuscate(FieldType.of(desc)))
-				.map(FieldType::toString)
-				.orElse(desc);
+	protected String remapFieldDesc(String desc) {
+		return MiniUtils.remapFieldDesc(mappings, desc);
 	}
 
 	// Below javadocs based on https://docs.oracle.com/javase/specs/jvms/se11/html/jvms-6.html#jvms-6.5.frem

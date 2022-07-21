@@ -1,6 +1,6 @@
 package nilloader.api;
 
-import nilloader.NilLoader;
+import nilloader.NilAgent;
 import nilloader.api.lib.mini.MiniTransformer;
 
 public interface ClassTransformer {
@@ -12,7 +12,7 @@ public interface ClassTransformer {
 	 * @see MiniTransformer
 	 */
 	static void register(ClassTransformer transformer) {
-		NilLoader.registerTransformer(transformer);
+		NilAgent.registerTransformer(transformer);
 	}
 	
 	default byte[] transform(ClassLoader loader, String className, byte[] originalData) {

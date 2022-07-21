@@ -144,7 +144,7 @@ class Decompiler {
 					return;
 				}
 			}
-			NilLoader.injectToSearchPath(new JarFile(quiltflower));
+			NilAgent.injectToSearchPath(new JarFile(quiltflower));
 			access = new QuiltflowerAccessImpl();
 		} catch (Throwable t) {
 			NilLoaderLog.log.error("Failed to load Quiltflower", t);

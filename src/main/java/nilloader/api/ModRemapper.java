@@ -2,7 +2,7 @@ package nilloader.api;
 
 import java.util.NoSuchElementException;
 
-import nilloader.NilLoader;
+import nilloader.NilAgent;
 
 public final class ModRemapper {
 
@@ -19,7 +19,7 @@ public final class ModRemapper {
 	 * @throws NoSuchElementException if there are no mappings available with the given id
 	 */
 	public static void setTargetMapping(String id) {
-		NilLoader.setTargetMapping(NilLoader.getActiveMod(), id);
+		NilAgent.setTargetMapping(NilAgent.getActiveMod(), id);
 	}
 	
 }

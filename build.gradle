@@ -9,7 +9,7 @@ targetCompatibility = 8
 
 group = "com.unascribed"
 archivesBaseName = "NilLoader"
-version = "1.2.2"
+version = "1.3.0"
 
 tasks.withType(JavaCompile) {
 	options.release = 8
@@ -40,6 +40,8 @@ dependencies {
 	shade 'org.cadixdev:lorenz-asm:0.5.6'
 	
 	shade 'com.grack:nanojson:1.7'
+	
+	compileOnly 'net.java.dev.jna:jna:5.11.0'
 	
 	compileOnly 'org.quiltmc:quiltflower:1.8.1'
 	compileOnly 'org.slf4j:slf4j-api:1.7.9'
@@ -75,7 +77,9 @@ shadowJar {
 	
 	manifest {
 		attributes (
-			'Premain-Class': 'nilloader.NilLoader'
+			'Premain-Class': 'nilloader.NilAgent',
+			'Agent-Class': 'nilloader.NilAgent',
+			'Can-Retransform-Classes': 'true'
 		)
 	}
 }

@@ -88,7 +88,27 @@ public class PatchContext {
 		
 		private void assertSuccessful() {
 			if (!isSuccessful()) {
-				throw new NoSuchElementException("Failed to find expected insn(s) in "+method.name+method.desc+" - search started from offset "+start+", going "+(reverse ? "backward" : "forward"));
+				StringBuilder msg = new StringBuilder("Failed to find expected insn");
+				if (query.length != 1) msg.append("s");
+				msg.append(" in ");
+				msg.append(method.name).append(method.desc);
+				msg.append(" - search started ");
+				if (start == null) {
+					msg.append("before code");
+				} else {
+					msg.append("from offset ").append(pointer);
+				}
+				msg.append(", going ");
+				msg.append(reverse ? "backward" : "forward");
+				msg.append(". Search query was:\n\t");
+				MiniUtils.describe(msg, query, "\t");
+				if (Boolean.getBoolean("nil.debug.dumpMethodCodeOnSearchFailure")) {
+					msg.append("\nActual method code:\n\t");
+					MiniUtils.describe(msg, code, "\t");
+				} else {
+					msg.append("\nAdd -Dnil.debug.dumpMethodCodeOnSearchFailure=true to dump the method code");
+				}
+				throw new NoSuchElementException(msg.toString());
 			}
 		}
 		
@@ -236,7 +256,7 @@ public class PatchContext {
 	public void addFireEntrypoint(String name) {
 		add(
 			new LdcInsnNode(name),
-			new MethodInsnNode(Opcodes.INVOKESTATIC, "nilloader/NilLoader", "fireEntrypoint", "(Ljava/lang/String;)V")
+			new MethodInsnNode(Opcodes.INVOKESTATIC, "nilloader/NilAgent", "fireEntrypoint", "(Ljava/lang/String;)V")
 		);
 	}
 	
@@ -413,11 +433,7 @@ public class PatchContext {
 					Arrays.equals(ia.bsmArgs, ib.bsmArgs) &&
 					equal(ia.name, ib.name) &&
 					equal(ia.desc, ib.desc);
-		} else if (a instanceof JumpInsnNode) {
-			JumpInsnNode ja = (JumpInsnNode)a;
-			JumpInsnNode jb = (JumpInsnNode)b;
-			return instructionsEqual(ja.label, jb.label);
-		} else if (a instanceof LabelNode) {
+		} else if (a instanceof JumpInsnNode || a instanceof LabelNode) {
 			// no good way to compare label equality
 			return true;
 		} else if (a instanceof LdcInsnNode) {
