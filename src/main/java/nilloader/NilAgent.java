@@ -317,6 +317,27 @@ public class NilAgent {
 		}
 		System.setProperty("java.class.path", System.getProperty("java.class.path")+javaClassPathAddn);
 		
+		if (loadedClasses.containsKey("cpw.mods.fml.relauncher.RelaunchClassLoader")) {
+			NilLoaderLog.log.info("HACK: Injecting nilmods into RelaunchClassLoader post-hoc");
+			try {
+				Class<?> relauncherClazz = Class.forName("cpw.mods.fml.relauncher.FMLRelauncher");
+				Class<?> loaderClazz = Class.forName("cpw.mods.fml.relauncher.RelaunchClassLoader");
+				Method instance = relauncherClazz.getDeclaredMethod("instance");
+				instance.setAccessible(true);
+				Object relauncher = instance.invoke(null);
+				Field classLoader = relauncherClazz.getDeclaredField("classLoader");
+				classLoader.setAccessible(true);
+				Object loader = classLoader.get(relauncher);
+				Method addURL = loaderClazz.getDeclaredMethod("addURL", URL.class);
+				addURL.setAccessible(true);
+				for (File f : additionalClassPath) {
+					addURL.invoke(loader, f.toURI().toURL());
+				}
+			} catch (Throwable t) {
+				NilLoaderLog.log.error("Failed to fix FML relauncher", t);
+			}
+		}
+		
 		ins.addTransformer((loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
 			if (className.startsWith("nilloader/")) return classfileBuffer; // break class loading loop when hijacking
 			try {
@@ -390,14 +411,16 @@ public class NilAgent {
 	private static void checkWidenLoad(Set<String> classes) {
 		widenSubjects.addAll(classes);
 		for (String s : classes) {
-			if (loadedClasses.containsKey(s)) {
+			if (loadedClasses.containsKey(s.replace('/', '.'))) {
 				try {
-					for (ClassLoader cl : loadedClasses.get(s)) {
+					for (ClassLoader cl : loadedClasses.get(s.replace('/', '.'))) {
 						try {
 							instrumentation.retransformClasses(Class.forName(s, false, cl));
 						} catch (ClassNotFoundException e) {}
 					}
 					NilLoaderLog.log.debug("Widened access of {} via retransformation as it was already loaded", s);
+				} catch (UnsupportedOperationException e) {
+					NilLoaderLog.log.warn("Failed to widen access of {} as this JVM can't retransform access - expect fireworks!", s);
 				} catch (Throwable t) {
 					NilLoaderLog.log.warn("Failed to widen access of {} - expect fireworks!", s, t);
 				}
@@ -634,6 +657,7 @@ public class NilAgent {
 	}
 	
 	public static byte[] transform(ClassLoader loader, String className, byte[] classBytes, boolean isRetransforming) {
+		if (isRetransforming) System.out.println("Retransform "+className+" in "+loader);
 		String verb = isRetransforming ? "retransform" : "transform";
 		byte[] orig = DEBUG_DUMP || DEBUG_DECOMPILE ? classBytes : null;
 		try {
@@ -801,14 +825,17 @@ public class NilAgent {
 			ClassRetransformer cr = (ClassRetransformer)transformer;
 			transformers.add(transformer);
 			for (String s : cr.getTargets()) {
-				if (loadedClasses.containsKey(s.replace('/', '.'))) {
+				String dots = s.replace('/', '.');
+				if (loadedClasses.containsKey(dots)) {
 					try {
-						for (ClassLoader cl : loadedClasses.get(s.replace('/', '.'))) {
+						for (ClassLoader cl : loadedClasses.get(dots)) {
 							try {
-								instrumentation.retransformClasses(Class.forName(s, false, cl));
-							} catch (ClassNotFoundException e) {}
+								instrumentation.retransformClasses(Class.forName(dots, false, cl));
+								NilLoaderLog.log.debug("Retransformed {} in {}", s, cl);
+							} catch (ClassNotFoundException e) {
+								NilLoaderLog.log.debug("Cannot retransform {} in {}", s, cl, e);
+							}
 						}
-						NilLoaderLog.log.debug("Retransformed {}", s);
 					} catch (Throwable t) {
 						NilLoaderLog.log.warn("Failed to retransform {}", s, t);
 					}
