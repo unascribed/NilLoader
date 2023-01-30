@@ -2,10 +2,11 @@ package nilloader.impl.fixes;
 
 import org.objectweb.asm.tree.LabelNode;
 
+import nilloader.api.ClassRetransformer;
 import nilloader.api.lib.mini.PatchContext;
 import nilloader.api.lib.mini.annotation.Patch;
 
-public abstract class GenericClassLoaderTransformer extends EarlyMiniTransformer {
+public abstract class GenericClassLoaderTransformer extends EarlyMiniTransformer implements ClassRetransformer {
 
 	@Patch.Method("loadClass(Ljava/lang/String;Z)Ljava/lang/Class;")
 	@Patch.Method.AffectsControlFlow

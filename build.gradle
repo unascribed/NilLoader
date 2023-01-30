@@ -38,10 +38,8 @@ dependencies {
 	
 	shade 'org.cadixdev:lorenz:0.5.6'
 	shade 'org.cadixdev:lorenz-asm:0.5.6'
-	
+
 	shade 'com.grack:nanojson:1.7'
-	
-	compileOnly 'net.java.dev.jna:jna:5.11.0'
 	
 	compileOnly 'org.quiltmc:quiltflower:1.8.1'
 	compileOnly 'org.slf4j:slf4j-api:1.7.9'

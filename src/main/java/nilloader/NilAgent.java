@@ -10,10 +10,12 @@ import java.io.PrintStream;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.Instrumentation;
 import java.lang.management.ManagementFactory;
-import java.net.MalformedURLException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -54,6 +56,8 @@ import nilloader.api.ClassTransformer;
 import nilloader.api.NilMetadata;
 import nilloader.api.lib.mini.MiniTransformer;
 import nilloader.api.lib.qdcss.QDCSS;
+import nilloader.impl.fixes.EarlyMiniTransformer;
+import nilloader.impl.fixes.ModuleClassLoaderTransformer;
 import nilloader.impl.fixes.NewKnotClassLoaderTransformer;
 import nilloader.impl.fixes.OldKnotClassLoaderTransformer;
 import nilloader.impl.fixes.RelaunchClassLoaderTransformer;
@@ -107,7 +111,6 @@ public class NilAgent {
 	private static Instrumentation instrumentation;
 	
 	private static String activeMod = null;
-	private static int initializations = 0;
 	private static int nilAgents = 1;
 	
 	private static boolean frozen = false;
@@ -119,13 +122,13 @@ public class NilAgent {
 	}
 	
 	public static void premain(String arg, Instrumentation ins) {
-		initializations++;
-		if (initializations > 1) {
-			NilLoaderLog.log.debug("Initializing for the {} time...", nth(initializations));
+		NilAgentPart.initializations++;
+		if (NilAgentPart.initializations > 1) {
+			NilLoaderLog.log.debug("Initializing for the {} time...", nth(NilAgentPart.initializations));
 			// Multiple nilmods are being added as Java agents; don't do a full reinit
 			// We need to delay performing final initialization until the last agent initializes to
 			// ensure all the agent jars are on the classpath
-			if (initializations == nilAgents) {
+			if (NilAgentPart.initializations == nilAgents) {
 				completePremain(ins);
 			}
 			return;
@@ -140,18 +143,42 @@ public class NilAgent {
 			}, ins.isRetransformClassesSupported());
 		}
 		loadTracker = (loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
-			if (loadedClasses != null) memoize(className, loader);
+			if (loadedClasses != null && classBeingRedefined == null) memoize(className, loader);
 			return classfileBuffer;
 		};
 		ins.addTransformer(loadTracker);
 		for (Class<?> c : ins.getAllLoadedClasses()) {
+			if (DEBUG_CLASSLOADING) {
+				ProtectionDomain protectionDomain = c.getProtectionDomain();
+				System.err.printf("Already loaded class %s via %s from %s%n", c.getName().replace('.', '/'), c.getClassLoader(),
+						(protectionDomain != null && protectionDomain.getCodeSource() != null) ? protectionDomain.getCodeSource().getLocation() : "[unknown]");
+			}
 			memoize(c.getName(), c.getClassLoader());
 		}
 		
 		// TODO it'd be nice to do this in a more generic way instead of needing loader-specific hacks
-		builtInTransformers.add(new RelaunchClassLoaderTransformer());
-		builtInTransformers.add(new NewKnotClassLoaderTransformer());
-		builtInTransformers.add(new OldKnotClassLoaderTransformer());
+		if (loadedClasses.containsKey("cpw.mods.fml.relauncher.RelaunchClassLoader")) {
+			try {
+				Class<?> relauncherClazz = Class.forName("cpw.mods.fml.relauncher.FMLRelauncher");
+				Class<?> loaderClazz = Class.forName("cpw.mods.fml.relauncher.RelaunchClassLoader");
+				Method instance = relauncherClazz.getDeclaredMethod("instance");
+				instance.setAccessible(true);
+				Object relauncher = instance.invoke(null);
+				Field classLoader = relauncherClazz.getDeclaredField("classLoader");
+				classLoader.setAccessible(true);
+				Object loader = classLoader.get(relauncher);
+				Method addExclusion = loaderClazz.getDeclaredMethod("addClassLoaderExclusion", String.class);
+				addExclusion.setAccessible(true);
+				addExclusion.invoke(loader, "nilloader.");
+			} catch (Throwable t) {
+				NilLoaderLog.log.error("Failed to fix FML relauncher", t);
+			}
+		} else {
+			registerTransformer(new RelaunchClassLoaderTransformer());
+		}
+		registerTransformer(new NewKnotClassLoaderTransformer());
+		registerTransformer(new OldKnotClassLoaderTransformer());
+		registerTransformer(new ModuleClassLoaderTransformer());
 		
 		ins.addTransformer((loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
 			if (className == null) return classfileBuffer;
@@ -172,17 +199,16 @@ public class NilAgent {
 				NilLoaderLog.log.error("Failed to load debug mappings", e);
 			}
 		}
-		URL us = getJarURL(NilAgent.class.getProtectionDomain().getCodeSource().getLocation());
+		URL us = NilAgentPart.getJarURL(NilAgent.class.getProtectionDomain().getCodeSource().getLocation());
 		try {
 			discover("nilloader", NilAgent.class.getClassLoader(), new File(us.toURI()));
 		} catch (URISyntaxException e) {
 			throw new AssertionError(e);
 		}
-		NilLoaderLog.log.info("NilLoader v{} initialized, logging via {}", mods.get("nilloader").version, NilLoaderLog.log.getImplementationName());
+		NilLoaderLog.log.info("NilLoader v{} initialized{}, logging via {}", mods.get("nilloader").version, hijacked ? " via hijack" : "", NilLoaderLog.log.getImplementationName());
 		File ourFile = null;
 		try {
 			ourFile = new File(us.toURI());
-			additionalClassPath.add(ourFile);
 			discover(ourFile, false);
 		} catch (URISyntaxException | IllegalArgumentException e) {
 			NilLoaderLog.log.debug("Failed to discover additional nilmods in our jar", e);
@@ -270,6 +296,7 @@ public class NilAgent {
 			File f = en.getKey();
 			try {
 				classSourceURLs.put(f.toURI().toURL(), en.getValue());
+				classSourceURLs.put(f.getCanonicalFile().toURI().toURL(), en.getValue());
 			} catch (IOException e) {
 				NilLoaderLog.log.error("Failed to add {} to class map", f, e);
 			}
@@ -289,26 +316,32 @@ public class NilAgent {
 			javaClassPathAddn.append(File.pathSeparator).append(f.getPath());
 		}
 		System.setProperty("java.class.path", System.getProperty("java.class.path")+javaClassPathAddn);
+		
 		ins.addTransformer((loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
-			if (classBeingRedefined != null || className == null) return classfileBuffer;
-			if (protectionDomain != null && protectionDomain.getCodeSource() != null) {
-				String definer = getDefiningMod(protectionDomain.getCodeSource().getLocation());
-				if (definer != null && isFrozen()) {
-					MappingSet mappings = getActiveMappings(definer);
-					if (mappings != null) {
-						NilLoaderLog.log.debug("Remapping mod class {} via mapping set {}", className, NilAgent.getActiveMappingId(definer));
-						classfileBuffer = remap(loader, classfileBuffer, mappings);
-						if (DEBUG_DUMP_MODREMAPPED) {
-							writeDump(className, classfileBuffer, "modRemapped", "class");
-						}
-						if (DEBUG_DECOMPILE_MODREMAPPED) {
-							byte[] finalBys = classfileBuffer.clone();
-							decompilerThread.execute(() -> {
-								writeDump(className, Decompiler.decompile(className, finalBys).getBytes(StandardCharsets.UTF_8), "modRemapped", "java");
-							});
+			if (className.startsWith("nilloader/")) return classfileBuffer; // break class loading loop when hijacking
+			try {
+				if (classBeingRedefined != null || className == null) return classfileBuffer;
+				if (protectionDomain != null && protectionDomain.getCodeSource() != null) {
+					String definer = getDefiningMod(protectionDomain.getCodeSource().getLocation(), 0);
+					if (definer != null && isFrozen()) {
+						MappingSet mappings = getActiveMappings(definer);
+						if (mappings != null) {
+							NilLoaderLog.log.debug("Remapping mod class {} via mapping set {}", className, NilAgent.getActiveMappingId(definer));
+							classfileBuffer = remap(loader, classfileBuffer, mappings);
+							if (DEBUG_DUMP_MODREMAPPED) {
+								writeDump(className, classfileBuffer, "modRemapped", "class");
+							}
+							if (DEBUG_DECOMPILE_MODREMAPPED) {
+								byte[] finalBys = classfileBuffer.clone();
+								decompilerThread.execute(() -> {
+									writeDump(className, Decompiler.decompile(className, finalBys).getBytes(StandardCharsets.UTF_8), "modRemapped", "java");
+								});
+							}
 						}
 					}
 				}
+			} catch (Throwable t) {
+				NilLoaderLog.log.error("Exception while remapping class {}", className, t);
 			}
 			return classfileBuffer;
 		});
@@ -554,7 +587,7 @@ public class NilAgent {
 	}
 	
 	public static void fireEntrypoint(String entrypoint) {
-		if (initializations == 0) {
+		if (NilAgentPart.initializations == 0) {
 			NilLoaderLog.log.error("fireEntrypoint called on an uninitialized NilLoader; classloading shenanigans? I was loaded by {}", NilAgent.class.getClassLoader());
 			return;
 		}
@@ -753,47 +786,24 @@ public class NilAgent {
 		return modMappings.getOrDefault(mod, Collections.emptyMap()).getOrDefault(getActiveMappingId(mod), null);
 	}
 	
-	public static URL getJarURL(URL codeSource) {
-		if ("jar".equals(codeSource.getProtocol())) {
-			String str = codeSource.toString().substring(4);
-			int bang = str.indexOf('!');
-			if (bang != -1) str = str.substring(0, bang);
-			try {
-				return new URL(str);
-			} catch (MalformedURLException e) {
-				return null;
-			}
-		} else if ("union".equals(codeSource.getProtocol())) {
-			// some ModLauncher nonsense
-			String str = codeSource.toString().substring(6);
-			int bullshit = str.indexOf("%23");
-			if (bullshit != -1) str = str.substring(0, bullshit);
-			try {
-				return new URL("file:"+str);
-			} catch (MalformedURLException e) {
-				return null;
-			}
-		}
-		return codeSource;
-	}
-	
-	public static String getDefiningMod(URL codeSource) {
+	public static String getDefiningMod(URL codeSource, int depth) {
 		String raw = classSourceURLs.get(codeSource);
-		if (raw == null) {
-			return getDefiningMod(getJarURL(codeSource));
+		if (raw == null && depth < 5) {
+			return getDefiningMod(NilAgentPart.getJarURL(codeSource), depth+1);
 		}
 		return raw;
 	}
 
 	public static void registerTransformer(ClassTransformer transformer) {
-		if (frozen) throw new IllegalStateException("Transformers must be registered during the premain entrypoint (or earlier)");
+		if (frozen) throw new IllegalStateException("Transformers must be registered during or before the premain/hijack entrypoints");
+		List<ClassTransformer> transformers = transformer instanceof EarlyMiniTransformer ? NilAgent.builtInTransformers : NilAgent.transformers;
 		if (transformer instanceof ClassRetransformer) {
 			ClassRetransformer cr = (ClassRetransformer)transformer;
 			transformers.add(transformer);
 			for (String s : cr.getTargets()) {
-				if (loadedClasses.containsKey(s)) {
+				if (loadedClasses.containsKey(s.replace('/', '.'))) {
 					try {
-						for (ClassLoader cl : loadedClasses.get(s)) {
+						for (ClassLoader cl : loadedClasses.get(s.replace('/', '.'))) {
 							try {
 								instrumentation.retransformClasses(Class.forName(s, false, cl));
 							} catch (ClassNotFoundException e) {}
@@ -807,7 +817,7 @@ public class NilAgent {
 		} else {
 			if (transformer instanceof MiniTransformer) {
 				MiniTransformer mini = (MiniTransformer)transformer;
-				if (loadedClasses.containsKey(mini.getClassTargetName())) {
+				if (loadedClasses.containsKey(mini.getClassTargetName().replace('/', '.'))) {
 					throw new IllegalStateException("Cannot register transformer for already loaded class: "+mini.getClassTargetName());
 				}
 			}
@@ -835,10 +845,6 @@ public class NilAgent {
 	
 	static void injectToSearchPath(JarFile file) {
 		instrumentation.appendToSystemClassLoaderSearch(file);
-	}
-	
-	public static int getInitializations() {
-		return initializations;
 	}
 	
 }
