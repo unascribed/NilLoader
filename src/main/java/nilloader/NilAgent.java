@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.function.Function;
@@ -47,16 +48,19 @@ import org.objectweb.asm.FieldVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.commons.ClassRemapper;
+import org.objectweb.asm.tree.ClassNode;
 
 import com.grack.nanojson.JsonArray;
 import com.grack.nanojson.JsonObject;
 import com.grack.nanojson.JsonParser;
+
+import nilloader.api.ASMTransformer;
 import nilloader.api.ClassRetransformer;
 import nilloader.api.ClassTransformer;
 import nilloader.api.NilMetadata;
+import nilloader.api.NonLoadingClassWriter;
 import nilloader.api.lib.mini.MiniTransformer;
 import nilloader.api.lib.qdcss.QDCSS;
-import nilloader.impl.fixes.EarlyMiniTransformer;
 import nilloader.impl.fixes.ModuleClassLoaderTransformer;
 import nilloader.impl.fixes.NewKnotClassLoaderTransformer;
 import nilloader.impl.fixes.OldKnotClassLoaderTransformer;
@@ -90,8 +94,7 @@ public class NilAgent {
 	
 	private static final Map<String, NilMetadata> mods = new LinkedHashMap<>();
 	private static final Map<String, List<EntrypointListener>> entrypointListeners = new HashMap<>();
-	private static final List<ClassTransformer> builtInTransformers = new ArrayList<>();
-	private static final List<ClassTransformer> transformers = new ArrayList<>();
+	private static final List<ClassTransformer> transformers = new CopyOnWriteArrayList<>();
 	private static final Set<File> additionalSearchPath = new LinkedHashSet<>();
 	private static final Set<File> additionalClassPath = new LinkedHashSet<>();
 	private static final Map<File, String> classSources = new LinkedHashMap<>();
@@ -657,29 +660,53 @@ public class NilAgent {
 	}
 	
 	public static byte[] transform(ClassLoader loader, String className, byte[] classBytes, boolean isRetransforming) {
-		if (isRetransforming) System.out.println("Retransform "+className+" in "+loader);
 		String verb = isRetransforming ? "retransform" : "transform";
 		byte[] orig = DEBUG_DUMP || DEBUG_DECOMPILE ? classBytes : null;
 		try {
-			boolean changed = false;
-			boolean failed = false;
-			for (ClassTransformer ct : builtInTransformers) {
-				try {
-					if ((classBytes = ct.transform(loader, className, classBytes)) != orig) {
-						changed = true;
+			List<ASMTransformer> asm = new ArrayList<>();
+			List<ClassTransformer> raw = new ArrayList<>();
+			for (ClassTransformer ct : transformers) {
+				if (ct instanceof ASMTransformer) {
+					ASMTransformer at = (ASMTransformer)ct;
+					try {
+						if (at.canTransform(loader, className)) {
+							asm.add(at);
+						}
+					} catch (Throwable t) {
+						NilLoaderLog.log.error("Failed to check if {} can be transformed by {}", className, ct.getClass().getName(), t);
 					}
-				} catch (Throwable t) {
-					NilLoaderLog.log.error("Failed to {} {} via built-in transformer {}", verb, className, ct.getClass().getName(), t);
-					failed = true;
+				} else {
+					raw.add(ct);
 				}
 			}
-			for (ClassTransformer ct : transformers) {
+			boolean changed = false;
+			boolean failed = false;
+			if (!asm.isEmpty()) {
+				changed = true;
+				ClassReader reader = new ClassReader(classBytes);
+				ClassNode clazz = new ClassNode();
+				reader.accept(clazz, 0);
+				boolean frames = false;
+				for (ASMTransformer ct : asm) {
+					try {
+						frames |= ct.transform(loader, clazz);
+					} catch (Throwable t) {
+						NilLoaderLog.log.error("Failed to {} {} via transformer {}", verb, className, ct.getClass().getName(), t);
+						failed = true;
+					}
+				}
+
+				ClassWriter writer = new NonLoadingClassWriter(loader, frames ? ClassWriter.COMPUTE_FRAMES : ClassWriter.COMPUTE_MAXS);
+				clazz.accept(writer);
+				classBytes = writer.toByteArray();
+			}
+			for (ClassTransformer ct : raw) {
 				try {
 					if ((classBytes = ct.transform(loader, className, classBytes)) != orig) {
 						changed = true;
 					}
 				} catch (Throwable t) {
-					NilLoaderLog.log.error("Failed to {} {} via mod transformer {}", verb, className, ct.getClass().getName(), t);
+					NilLoaderLog.log.error("Failed to {} {} via transformer {}", verb, className, ct.getClass().getName(), t);
 					failed = true;
 				}
 			}
@@ -820,7 +847,6 @@ public class NilAgent {
 
 	public static void registerTransformer(ClassTransformer transformer) {
 		if (frozen) throw new IllegalStateException("Transformers must be registered during or before the premain/hijack entrypoints");
-		List<ClassTransformer> transformers = transformer instanceof EarlyMiniTransformer ? NilAgent.builtInTransformers : NilAgent.transformers;
 		if (transformer instanceof ClassRetransformer) {
 			ClassRetransformer cr = (ClassRetransformer)transformer;
 			transformers.add(transformer);

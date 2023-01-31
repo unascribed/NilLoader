@@ -39,22 +39,20 @@ import java.util.Set;
 
 import org.cadixdev.bombe.type.signature.MethodSignature;
 import org.cadixdev.lorenz.MappingSet;
-import org.objectweb.asm.ClassReader;
-import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.*;
 
 import nilloader.NilAgent;
 import nilloader.NilLoaderLog;
-import nilloader.api.ClassTransformer;
+import nilloader.api.ASMTransformer;
 import nilloader.api.lib.mini.annotation.Patch;
 
 import org.objectweb.asm.Type;
 
 import static org.objectweb.asm.Opcodes.*;
 
-public abstract class MiniTransformer implements ClassTransformer {
+public abstract class MiniTransformer implements ASMTransformer {
 	
 	private interface PatchMethod {
 		boolean patch(PatchContext ctx) throws Throwable;
@@ -128,18 +126,9 @@ public abstract class MiniTransformer implements ClassTransformer {
 	}
 	
 	@Override
-	public final byte[] transform(String className, byte[] originalData) {
-		return transform(ClassLoader.getSystemClassLoader(), className, originalData);
-	}
-	
-	@Override
-	public final byte[] transform(ClassLoader loader, String className, byte[] basicClass) {
-		className = className.replace('.', '/');
-		if (!classTargetName.equals(className)) return basicClass;
-		
-		ClassReader reader = new ClassReader(basicClass);
-		ClassNode clazz = new ClassNode();
-		reader.accept(clazz, 0);
+	public final boolean transform(ClassLoader loader, ClassNode clazz) {
+		String className = clazz.name.replace('.', '/');
+		if (!classTargetName.equals(className)) return false;
 		
 		boolean frames = modifyClassStructure(clazz);
 		
@@ -191,18 +180,22 @@ public abstract class MiniTransformer implements ClassTransformer {
 			throw new Error(msgS);
 		}
 		
-		int flags = ClassWriter.COMPUTE_MAXS;
-		if (frames) {
-			flags |= ClassWriter.COMPUTE_FRAMES;
-		}
-		ClassWriter writer = new ClassWriter(flags) {
-			@Override
-			protected ClassLoader getClassLoader() {
-				return loader;
-			}
-		};
-		clazz.accept(writer);
-		return writer.toByteArray();
+		return frames;
+	}
+	
+	@Override
+	public final boolean canTransform(ClassLoader loader, String className) {
+		return classTargetName.equals(className.replace('.', '/'));
+	}
+	
+	@Override @Deprecated
+	public final byte[] transform(ClassLoader loader, String className, byte[] originalData) {
+		return ASMTransformer.super.transform(loader, className, originalData);
+	}
+	
+	@Override @Deprecated
+	public final byte[] transform(String className, byte[] originalData) {
+		return ASMTransformer.super.transform(className, originalData);
 	}
 	
 	protected void $$internal$logDebug(String fmt, Object... params) {
