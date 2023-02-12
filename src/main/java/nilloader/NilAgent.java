@@ -880,7 +880,7 @@ public class NilAgent {
 
 	public static void setTargetMapping(String mod, String id) {
 		if (mod == null) throw new IllegalStateException("Can only call this method during an entrypoint");
-		if (frozen) throw new IllegalStateException("Mappings must be set during the premain entrypoint");
+		if (frozen) throw new IllegalStateException("Mappings must be set during the premain/hijack entrypoint");
 		activeModMappings.put(mod, id);
 	}
 

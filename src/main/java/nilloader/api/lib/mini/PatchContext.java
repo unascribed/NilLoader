@@ -146,7 +146,7 @@ public class PatchContext {
 		public SearchResult next() {
 			assertSuccessful();
 			assertValid();
-			return searchFrom(reverse ? code.indexOf(start) : code.indexOf(end), query, reverse);
+			return searchFrom(reverse ? code.indexOf(start) : code.indexOf(end)+1, query, reverse);
 		}
 		
 		/**
