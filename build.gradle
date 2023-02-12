@@ -89,8 +89,8 @@ task sourcesJar(type: Jar) {
 	from 'src/lib/java'
 }
 
-task polymcJson(type: Copy) {
-	from('polymc.json') {
+task prismJson(type: Copy) {
+	from('prism.json') {
 		expand 'version': project.version
 	}
 
@@ -119,17 +119,17 @@ publishing {
 			version = project.version
 			artifact shadowJar
 			artifact sourcesJar
-			artifact('build/libs/polymc.json') {
-				classifier 'polymc'
+			artifact('build/libs/prism.json') {
+				classifier 'prism'
 			}
 		}
 	}
 }
 
 tasks.withType(AbstractPublishToMaven).each {
-	it.dependsOn tasks.polymcJson
+	it.dependsOn tasks.prismJson
 }
 
-tasks.build.dependsOn tasks.polymcJson
+tasks.build.dependsOn tasks.prismJson
 tasks.build.dependsOn tasks.shadowJar
 tasks.build.dependsOn tasks.sourcesJar

@@ -40,7 +40,7 @@ ports to Beta 1.7, early versions of Forge, NFC, etc. That is, more or less, its
 ## Using NilLoader
 
 More comprehensive docs coming soon, but for now, check out [NilExample](https://git.sleeping.town/unascribed/NilExample)
-to write mods, and use [this PolyMC component JSON](https://repo.sleeping.town/com/unascribed/nilloader/1.2.1/nilloader-1.2.1-polymc.json)
+to write mods, and use [this Prism Launcher component JSON](https://repo.sleeping.town/com/unascribed/nilloader/1.2.1/nilloader-1.2.1-prism.json)
 to install it. (Click "Add Empty" under versions, enter "NilLoader" and
 "com.unascribed.nilloader", then click Edit on the right, and replace the contents
 of the file it opens with that JSON.)
