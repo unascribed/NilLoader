@@ -19,7 +19,7 @@ public class NonLoadingClassWriter extends ClassWriter {
 
 	public NonLoadingClassWriter(ClassLoader loader, int flags) {
 		super(flags);
-		this.loader = loader;
+		this.loader = loader == null ? ClassLoader.getSystemClassLoader() : loader;
 	}
 
 	@Override
