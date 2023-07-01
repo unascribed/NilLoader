@@ -673,7 +673,7 @@ public class NilAgent {
 							asm.add(at);
 						}
 					} catch (Throwable t) {
-						NilLoaderLog.log.error("Failed to check if {} can be transformed by {}", className, ct.getClass().getName(), t);
+						NilLoaderLog.log.error("Failed to check if {} can be {}ed by {} - assuming the answer is no", className, verb, ct.getClass().getName(), t);
 					}
 				} else {
 					raw.add(ct);
