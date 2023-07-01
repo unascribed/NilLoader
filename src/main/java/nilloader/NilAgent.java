@@ -61,7 +61,6 @@ import nilloader.api.NilMetadata;
 import nilloader.api.NonLoadingClassWriter;
 import nilloader.api.lib.mini.MiniTransformer;
 import nilloader.api.lib.qdcss.QDCSS;
-import nilloader.impl.fixes.ModuleClassLoaderTransformer;
 import nilloader.impl.fixes.NewKnotClassLoaderTransformer;
 import nilloader.impl.fixes.OldKnotClassLoaderTransformer;
 import nilloader.impl.fixes.RelaunchClassLoaderTransformer;
@@ -181,7 +180,8 @@ public class NilAgent {
 		}
 		registerTransformer(new NewKnotClassLoaderTransformer());
 		registerTransformer(new OldKnotClassLoaderTransformer());
-		registerTransformer(new ModuleClassLoaderTransformer());
+		// TODO - #2
+//		registerTransformer(new ModuleClassLoaderTransformer());
 		
 		ins.addTransformer((loader, className, classBeingRedefined, protectionDomain, classfileBuffer) -> {
 			if (className == null) return classfileBuffer;
