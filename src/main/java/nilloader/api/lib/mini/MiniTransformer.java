@@ -143,7 +143,7 @@ public abstract class MiniTransformer implements ASMTransformer {
 			if (li != null) {
 				for (PatchMethod pm : li) {
 					try {
-						PatchContext ctx = new PatchContext(mn);
+						PatchContext ctx = new PatchContext(mn, this.mappings);
 						frames |= pm.patch(ctx);
 						ctx.finish();
 					} catch (Throwable t) {

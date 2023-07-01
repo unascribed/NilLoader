@@ -32,7 +32,9 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 
+import org.cadixdev.lorenz.MappingSet;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.FieldInsnNode;
@@ -50,6 +52,7 @@ import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 import org.objectweb.asm.tree.MultiANewArrayInsnNode;
 import org.objectweb.asm.tree.TableSwitchInsnNode;
+import org.objectweb.asm.tree.TryCatchBlockNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
@@ -168,11 +171,13 @@ public class PatchContext {
 
 	private final MethodNode method;
 	private final List<AbstractInsnNode> code;
+	private final Optional<MappingSet> mappings;
 	private int pointer = -1;
 	
-	PatchContext(MethodNode method) {
+	PatchContext(MethodNode method, Optional<MappingSet> mappings) {
 		this.method = method;
 		this.code = new ArrayList<AbstractInsnNode>(method.instructions.size());
+		this.mappings = mappings;
 		AbstractInsnNode ain = method.instructions.getFirst();
 		Map<LabelNode, LabelNode> labels = new IdentityHashMap<LabelNode, LabelNode>();
 		while (ain != null) {
@@ -258,6 +263,19 @@ public class PatchContext {
 			new LdcInsnNode(name),
 			new MethodInsnNode(Opcodes.INVOKESTATIC, "nilloader/NilAgent", "fireEntrypoint", "(Ljava/lang/String;)V")
 		);
+	}
+
+	/**
+	 * Inject an entry into the method's exception table, by specifying the start and end of the handled range,
+	 * and the start of the exception handler.
+	 *
+	 * @param start the label to start the handled range
+	 * @param end the label to end the handled range
+	 * @param handler the start of the handler
+	 * @param exceptionType the type of exception that the handler accepts, null if this is a finally handler
+	 */
+	public void addTryBlock(LabelNode start, LabelNode end, LabelNode handler, String exceptionType) {
+		this.method.tryCatchBlocks.add(new TryCatchBlockNode(start, end, handler, MiniUtils.remapType(this.mappings, exceptionType)));
 	}
 	
 	/**
