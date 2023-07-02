@@ -11,6 +11,7 @@ public class Hijacker {
 		} catch (Throwable t) {
 			System.err.println("Failed to hijack");
 			t.printStackTrace();
+			System.exit(1);
 		}
 	}
 

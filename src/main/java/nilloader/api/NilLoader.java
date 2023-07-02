@@ -2,6 +2,7 @@ package nilloader.api;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.lang.management.ManagementFactory;
 import java.net.URISyntaxException;
 import java.util.Locale;
@@ -46,14 +47,17 @@ public class NilLoader {
 			p.getOutputStream().close();
 			while (p.isAlive()) {
 				try {
-					p.waitFor();
+					int code = p.waitFor();
+					if (code != 0) {
+						throw new RuntimeException("NilLoader hijack failed");
+					}
 				} catch (InterruptedException e) {
 				}
 			}
 		} catch (IOException e) {
-			e.printStackTrace();
+			throw new UncheckedIOException(e);
 		} catch (URISyntaxException e) {
-			e.printStackTrace();
+			throw new RuntimeException(e);
 		}
 	}
 	
